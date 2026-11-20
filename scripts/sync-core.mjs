@@ -78,6 +78,7 @@ const header = [
   ''
 ].join('\n');
 
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(
   outPath,
   header + data + '\n\n' + coreBody +
