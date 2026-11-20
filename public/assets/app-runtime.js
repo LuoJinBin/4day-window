@@ -46,18 +46,7 @@ async function fetchActual(){
   const daily=aggPoints(dl.map(function(x){ return x.daily; }));
   const hl=arr.filter(function(x){ return x.hourly; });
   const hourly=hl.length? aggPoints(hl.map(function(x){ return x.hourly; })) : null;
-  if(hourly && hourly.precipitation && hourly.time){
-    const now=chinaParts(), nowIso=chinaIso();
-    const cut=nowIso+'T'+now.hour+':00';
-    let born=0, observedHours=0;
-    for(let i=0;i<hourly.time.length;i++){
-      const t=hourly.time[i], v=hourly.precipitation[i];
-      // 当前小时尚未结束，不能把该小时的预报值计入“已经下过的雨”。
-      if(v==null || t<nowIso+'T06:00' || t>=cut) continue;
-      born+=v; observedHours++;
-    }
-    if(observedHours>0) daily.__bornToday=Math.round(born*10)/10;
-  }
+  if(hourly) completedHourlyRain(daily,hourly);
   return daily;
 }
 async function refreshActual(){
@@ -106,7 +95,7 @@ async function renderAcc(){
   // 今天：拿当前这份预报对今天到现在为止的实况，先看个大概
   const todayIso=isoOf(new Date());
   const todayPred=(VIEW&&VIEW.days)? VIEW.days.find(d=> d.date===todayIso.slice(5)) : null;
-  const todayA=A[todayIso];
+  const todayA=typeof daily.__bornToday==='number'? A[todayIso] : null;
 
   const hitN=rows.filter(r=>r.hit).length;
   const hiErr=rows.filter(r=>r.dHi!=null).map(r=>r.dHi);
@@ -223,9 +212,17 @@ const API_BASE='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23
 const API_GROUPS=['&models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless',
                   '&models=cma_grapes_global,icon_seamless,meteofrance_seamless'];
 function aggPoints(list){
-  if(!list.length) return null;
+  if(!Array.isArray(list) || !list.length) return null;
+  const base=list[0] && list[0].time;
+  if(!Array.isArray(base) || !base.length) throw new Error('四点合成缺少有效日期序列');
+  list.forEach(function(d,index){
+    if(!d || !Array.isArray(d.time) || d.time.length!==base.length
+      || d.time.some(function(v,i){ return v!==base[i]; })){
+      throw new Error('四点合成日期不一致（点位 '+(index+1)+'）');
+    }
+  });
   if(list.length===1) return list[0];
-  const out={time:list[0].time};
+  const out={time:base};
   Object.keys(list[0]).forEach(function(k){
     if(k==='time') return;
     if(k.indexOf('weather_code')===0){
