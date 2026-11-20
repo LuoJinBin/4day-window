@@ -73,7 +73,7 @@ npm start             # http://127.0.0.1:8787
 测试与检查：
 
 ```bash
-npm test              # 12 项：窗口/判定/风险分级/权重/气候/回测结构/接口
+npm test              # 覆盖窗口判定、时区/实况、点位一致性、缓存/调度、接口与静态资源
 npm run check:page    # 四个 JS 模块语法 + 首页关键结构
 ```
 
@@ -179,7 +179,7 @@ heavy    = 重雨权重过半
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT` | `8787` | 监听端口 |
-| `HOST` | `127.0.0.1` | 监听地址；容器部署可设 `0.0.0.0` |
+| `HOST` | `0.0.0.0` | 监听地址；本机可改为 `127.0.0.1` |
 | `CACHE_TTL_MINUTES` | `360` | 缓存有效期（与页面 6 小时一致） |
 | `REFRESH_INTERVAL_MINUTES` | `360` | 定时刷新间隔，最小 5 分钟 |
 | `CACHE_FILE` | `data/cache/forecast.json` | 磁盘缓存路径 |
@@ -206,7 +206,7 @@ heavy    = 重雨权重过半
 ### 部署
 
 - 静态：上传 `public/`（Nginx / 对象存储 / 飞书应用托管均可）。
-- 服务：`npm start`，Nginx 反代到 `127.0.0.1:8787`；`data/` 需可写。单进程即可，定时器进程内运行，无需 cron。
+- 服务：`npm start`；默认监听 `0.0.0.0:8787`，适用于容器和 Render。生产服务需要可写的 `data/cache/`；单进程即可，定时器进程内运行，无需 cron。
 - 继续用豆包 HTML 应用发布时：`lark-cli apps +deploy --file-path "<相对路径>" --app-id app_17j5a7evesj`，再用 `+release-get` 轮询到 `finished`。注意 `--file-path` 只收相对 cwd 的路径，且必须与 `cd` 同一条命令。
 
 ---
