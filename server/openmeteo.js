@@ -59,12 +59,15 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
       : [];
   if (!list.length) throw new Error('Open-Meteo 返回无 daily 数据');
   if (list.length > 8) throw new Error('Open-Meteo 返回点位过多');
+  if (list.length !== cfg.points.length) {
+    throw new Error('Open-Meteo 返回点位数量不符：期望 ' + cfg.points.length + '，实际 ' + list.length);
+  }
   list.forEach((daily, index) => {
     if (!Array.isArray(daily.time) || daily.time.length < 6) {
       throw new Error('Open-Meteo 第 ' + (index + 1) + ' 个点位缺少有效日期序列');
     }
     for (let i = 0; i < daily.time.length; i += 1) {
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(daily.time[i])
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(daily.time[i])
         || (i > 0 && daily.time[i] <= daily.time[i - 1])) {
         throw new Error('Open-Meteo 第 ' + (index + 1) + ' 个点位日期无效或未递增');
       }
