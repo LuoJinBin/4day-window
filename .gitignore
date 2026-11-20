@@ -30,3 +30,6 @@ dist/
 
 # 自动生成的 Node 核心模块（由 npm install / npm test / npm start 重新生成）
 src/core/logic.js
+
+# 由 npm run data:export 生成的快照导出（前端已内置同源快照）
+data/snapshot-*.json
