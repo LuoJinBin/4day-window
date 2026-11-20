@@ -4,10 +4,12 @@ import path from 'node:path';
 import config, { ROOT } from './config.js';
 import { createForecastService } from './forecast-service.js';
 import { buildWindows } from '../src/core/logic.js';
+import { ageMinutes, isFresh } from './cache.js';
 import { startScheduler } from './scheduler.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const DATA = path.join(ROOT, 'data');
+const DATASETS = new Set(['climatology', 'backtest', 'weights', 'sources', 'condition-matrix', 'confidence-levels']);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -23,8 +25,15 @@ const MIME = {
   '.map': 'application/json; charset=utf-8'
 };
 
+function securityHeaders(res) {
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
+  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+}
+
 const json = (res, code, obj) => {
   const body = JSON.stringify(obj);
+  securityHeaders(res);
   res.writeHead(code, {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(body),
@@ -34,8 +43,8 @@ const json = (res, code, obj) => {
 };
 
 function readData(name) {
+  if (!DATASETS.has(name)) return null;
   const file = path.join(DATA, name + '.json');
-  if (!file.startsWith(DATA + path.sep)) return null;
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
@@ -43,25 +52,38 @@ function readData(name) {
   }
 }
 
-function serveStatic(req, res) {
-  const url = new URL(req.url, 'http://localhost');
-  const rel = decodeURIComponent(url.pathname);
-  let file = path.join(PUBLIC, rel === '/' ? 'index.html' : rel);
+function resolvePublicPath(pathname) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return { error: 400 };
+  }
+  if (decoded.includes('\0')) return { error: 400 };
+  const relativePath = decoded.replace(/^[/\\]+/, '');
+  const file = path.resolve(PUBLIC, relativePath || 'index.html');
+  const relative = path.relative(PUBLIC, file);
+  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+    return { error: 403 };
+  }
+  return { file };
+}
 
-  if (!file.startsWith(PUBLIC + path.sep)) {
-    res.writeHead(403).end('forbidden');
+function serveStatic(req, res, url) {
+  const resolved = resolvePublicPath(url.pathname);
+  if (resolved.error) {
+    res.writeHead(resolved.error, { 'content-type': 'text/plain; charset=utf-8' }).end(resolved.error === 403 ? 'forbidden' : 'bad request');
     return;
   }
+  let file = resolved.file;
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
-  if (!fs.existsSync(file)) {
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('not found');
     return;
   }
 
   const ext = path.extname(file).toLowerCase();
   let body = fs.readFileSync(file);
-
-  // 本地起服务时把前端数据源切到同源 /api/forecast（静态部署则保持直连 Open-Meteo）。
   if (ext === '.html') {
     body = Buffer.from(
       body.toString('utf8').replace("window.GZ_API_BASE = ''", "window.GZ_API_BASE = '/api/forecast'"),
@@ -69,10 +91,13 @@ function serveStatic(req, res) {
     );
   }
 
+  securityHeaders(res);
   res.writeHead(200, {
     'content-type': MIME[ext] || 'application/octet-stream',
     'content-length': body.length,
-    'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=3600'
+    'cache-control': ext === '.html' || ['.js', '.mjs', '.css', '.json'].includes(ext)
+      ? 'no-cache'
+      : 'public, max-age=3600'
   });
   res.end(body);
 }
@@ -80,17 +105,26 @@ function serveStatic(req, res) {
 export function createApp(cfg = config, deps = {}) {
   const service = deps.service || createForecastService(cfg, deps);
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://localhost');
+    let url;
+    try {
+      url = new URL(req.url, 'http://localhost');
+    } catch {
+      return json(res, 400, { error: 'bad request URL' });
+    }
     const p = url.pathname;
 
     try {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.setHeader('allow', 'GET, HEAD');
+        return json(res, 405, { error: 'method not allowed' });
+      }
       if (p === '/api/health') {
         const entry = service.peek();
         return json(res, 200, {
           ok: true,
           updatedAt: entry ? entry.iso : null,
-          ageMinutes: entry ? Math.round((Date.now() - entry.ts) / 60000) : null,
-          stale: entry ? Date.now() - entry.ts >= cfg.cacheTtlMs : true,
+          ageMinutes: ageMinutes(entry),
+          stale: !isFresh(entry, cfg.cacheTtlMs),
           lastError: service.error() ? service.error().message : null
         });
       }
@@ -99,7 +133,7 @@ export function createApp(cfg = config, deps = {}) {
         const allowForce = process.env.ALLOW_FORCE_REFRESH === 'true';
         const force = allowForce && url.searchParams.get('force') === '1';
         const r = await service.get({ force });
-        if (!r.ok) return json(res, r.status || 503, { error: r.error });
+        if (!r.ok) return json(res, r.status || 503, { error: r.error, stale: true });
         return json(res, 200, {
           updatedAt: r.updatedAt,
           stale: r.stale,
@@ -112,8 +146,8 @@ export function createApp(cfg = config, deps = {}) {
 
       if (p === '/api/forecast/raw') {
         const r = await service.get({});
-        if (!r.ok) return json(res, r.status || 503, { error: r.error });
-        return json(res, 200, { updatedAt: r.updatedAt, rawDaily: r.rawDaily });
+        if (!r.ok) return json(res, r.status || 503, { error: r.error, stale: true });
+        return json(res, 200, { updatedAt: r.updatedAt, stale: r.stale, ageMinutes: r.ageMinutes, rawDaily: r.rawDaily });
       }
 
       if (p === '/api/config') {
@@ -125,15 +159,30 @@ export function createApp(cfg = config, deps = {}) {
       }
 
       if (p.startsWith('/api/data/')) {
-        const name = p.slice('/api/data/'.length).replace(/\W/g, '');
+        let name;
+        try { name = decodeURIComponent(p.slice('/api/data/'.length)); }
+        catch { return json(res, 400, { error: 'bad dataset path' }); }
+        if (!DATASETS.has(name)) return json(res, 404, { error: 'unknown dataset: ' + name });
         const obj = readData(name);
-        if (!obj) return json(res, 404, { error: 'unknown dataset: ' + name });
+        if (!obj) return json(res, 404, { error: 'dataset not found: ' + name });
         return json(res, 200, obj);
       }
 
       if (p.startsWith('/api/')) return json(res, 404, { error: 'not found' });
 
-      return serveStatic(req, res);
+      if (req.method === 'HEAD') {
+        const resolved = resolvePublicPath(p);
+        if (resolved.error) return res.writeHead(resolved.error).end();
+        const file = resolved.file;
+        if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return res.writeHead(404).end();
+        const ext = path.extname(file).toLowerCase();
+        securityHeaders(res);
+        return res.writeHead(200, {
+          'content-type': MIME[ext] || 'application/octet-stream',
+          'cache-control': ext === '.html' || ['.js', '.mjs', '.css', '.json'].includes(ext) ? 'no-cache' : 'public, max-age=3600'
+        }).end();
+      }
+      return serveStatic(req, res, url);
     } catch (err) {
       return json(res, 500, { error: err && err.message ? err.message : 'server error' });
     }
