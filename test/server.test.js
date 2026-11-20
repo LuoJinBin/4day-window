@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildForecastUrl, fetchForecast } from '../server/openmeteo.js';
 import { createApp } from '../server/index.js';
+import { parsePoints } from '../server/config.js';
 import { SNAP } from '../src/core/logic.js';
 import { createForecastService } from '../server/forecast-service.js';
 import { writeCache } from '../server/cache.js';
@@ -51,9 +52,27 @@ test('预报 URL 与页面同参：四点多值、六模式、Asia/Shanghai', ()
   assert.match(url, /models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless,cma_grapes_global,icon_seamless,meteofrance_seamless/);
 });
 
+test('坐标配置严格校验数量、格式和经纬度范围', () => {
+  assert.deepEqual(parsePoints('23.1,113.2;23.2,113.3'),[
+    {lat:23.1,lon:113.2},{lat:23.2,lon:113.3}
+  ]);
+  assert.throws(()=>parsePoints('23.1,113.2;'),/non-empty/);
+  assert.throws(()=>parsePoints('91,113.2'),/invalid coordinate/);
+  assert.throws(()=>parsePoints('23.1,113.2;23.2'),/must be lat,lon/);
+});
+
+test('Open-Meteo 永久性 4xx 不进行无意义重试', async () => {
+  let calls=0;
+  await assert.rejects(fetchForecast(cfg,{fetchImpl:async()=>{
+    calls++;
+    return {ok:false,status:400};
+  }}),/HTTP 400/);
+  assert.equal(calls,1);
+});
+
 test('解析多模式响应：远期只剩 ECMWF，缺失模式不冒充覆盖', async () => {
   const raw = syntheticDaily();
-  const stub = async () => ({ ok: true, json: async () => ({ daily: raw }) });
+  const stub = async () => ({ ok: true, json: async () => [0,1,2,3].map(() => ({ daily: raw })) });
   const { view } = await fetchForecast(cfg, { fetchImpl: stub });
   assert.equal(view.days.length, 16);
   assert.equal(view.windows.length, 13);
@@ -63,6 +82,15 @@ test('解析多模式响应：远期只剩 ECMWF，缺失模式不冒充覆盖',
   assert.ok(view.days[7].n <= 3);
   // 第 13 天：只剩 ECMWF 两个产品
   assert.equal(view.days[12].n, 2);
+});
+
+test('Open-Meteo 拒绝日期错位或返回点位数量不足的数据', async () => {
+  const base=syntheticDaily();
+  const shifted=syntheticDaily();
+  shifted.time=shifted.time.map((iso,i)=>i===0?'2026-11-21':iso);
+  const response=(items)=>async()=>({ok:true,json:async()=>items.map(daily=>({daily}))});
+  await assert.rejects(fetchForecast(cfg,{fetchImpl:response([base,base,shifted,base])}),/日期不一致/);
+  await assert.rejects(fetchForecast(cfg,{fetchImpl:response([base,base,base])}),/点位数量不符/);
 });
 
 test('HTTP：首页注入同源 API，接口与静态资源可用', async (t) => {
@@ -186,7 +214,7 @@ test('并发首次请求共享同一次上游刷新', async (t) => {
   const service = createForecastService({ ...cfg, cacheFile }, {
     fetchImpl: async () => {
       calls += 1;
-      return { ok: true, json: async () => ({ daily: syntheticDaily() }) };
+      return { ok: true, json: async () => [0,1,2,3].map(() => ({ daily: syntheticDaily() })) };
     },
     logger: { log() {}, warn() {} }
   });
