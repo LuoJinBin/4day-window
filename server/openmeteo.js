@@ -62,7 +62,12 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
   if (list.length !== cfg.points.length) {
     throw new Error('Open-Meteo 返回点位数量不符：期望 ' + cfg.points.length + '，实际 ' + list.length);
   }
+  const baseDates = list[0].time;
   list.forEach((daily, index) => {
+    if (!Array.isArray(daily.time) || daily.time.length !== baseDates.length
+      || daily.time.some((date, i) => date !== baseDates[i])) {
+      throw new Error('Open-Meteo 点位日期不一致（点位 ' + (index + 1) + '）');
+    }
     if (!Array.isArray(daily.time) || daily.time.length < 6) {
       throw new Error('Open-Meteo 第 ' + (index + 1) + ' 个点位缺少有效日期序列');
     }
