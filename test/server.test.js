@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import { buildForecastUrl, fetchForecast } from '../server/openmeteo.js';
 import { createApp } from '../server/index.js';
 import { SNAP } from '../src/core/logic.js';
+import { createForecastService } from '../server/forecast-service.js';
+import { writeCache } from '../server/cache.js';
+import { startScheduler } from '../server/scheduler.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const DAYS = 16;
 const dates = Array.from({ length: DAYS }, (_, i) => {
@@ -81,13 +87,111 @@ test('HTTP：首页注入同源 API，接口与静态资源可用', async (t) =>
   const climo = await (await fetch(base + '/api/data/climatology')).json();
   assert.equal(climo.meta.years, 11);
 
+  const matrixRes = await fetch(base + '/api/data/condition-matrix');
+  assert.equal(matrixRes.status, 200);
+  assert.equal(typeof (await matrixRes.json()).cond, 'object');
+
+  const levelsRes = await fetch(base + '/api/data/confidence-levels');
+  assert.equal(levelsRes.status, 200);
+  assert.deepEqual(await levelsRes.json(), ['仅趋势', '低', '中', '高']);
+
+  assert.equal((await fetch(base + '/api/data/conditionmatrix')).status, 404);
+  assert.notEqual((await fetch(base + '/api/data/%2e%2e%2f..%2fserver%2fconfig')).status, 200);
+  assert.notEqual((await fetch(base + '/assets/%2e%2e%2fserver%2fconfig.js')).status, 200);
+  assert.equal((await fetch(base + '/api/forecast', { method: 'POST' })).status, 405);
+
   const html = await (await fetch(base + '/')).text();
   assert.match(html, /window\.GZ_API_BASE = '\/api\/forecast'/);
 
   const js = await fetch(base + '/assets/app-core.js');
   assert.equal(js.status, 200);
   assert.match(js.headers.get('content-type'), /javascript/);
+  assert.equal(js.headers.get('cache-control'), 'no-cache');
+  assert.equal(js.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal((await fetch(base + '/', { method: 'HEAD' })).status, 200);
 
   const traversal = await fetch(base + '/../server/config.js');
   assert.equal(traversal.status, 404);
+});
+
+test('服务启动与定时检查尊重 TTL，不强制刷新有效缓存', async () => {
+  const calls = [];
+  let tick = null;
+  let cleared = null;
+  const oldSetInterval = globalThis.setInterval;
+  const oldClearInterval = globalThis.clearInterval;
+  globalThis.setInterval = (fn, ms) => {
+    tick = fn;
+    assert.equal(ms, 5 * 60 * 1000);
+    return { unref() {} };
+  };
+  globalThis.clearInterval = (id) => { cleared = id; };
+  try {
+    const timerId = 77;
+    const service = { get: async (opts) => { calls.push(opts); return { ok: true }; } };
+    const stop = startScheduler(service, { refreshMinutes: 5 });
+    await Promise.resolve();
+    assert.deepEqual(calls, [{}]);
+    tick();
+    await Promise.resolve();
+    assert.deepEqual(calls, [{}, {}]);
+    stop();
+    assert.ok(cleared);
+  } finally {
+    globalThis.setInterval = oldSetInterval;
+    globalThis.clearInterval = oldClearInterval;
+  }
+});
+
+test('预报服务复用有效磁盘缓存，不请求上游；过期缓存失败时明确返回 stale', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gz-cache-test-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const cacheFile = path.join(dir, 'forecast.json');
+  const now = Date.parse('2026-11-20T12:00:00.000Z');
+  const cached = {
+    ts: now - 10 * 60 * 1000,
+    iso: new Date(now - 10 * 60 * 1000).toISOString(),
+    view: { days: SNAP.days, windows: [] },
+    rawDaily: { time: [] }
+  };
+  writeCache(cacheFile, cached);
+  let calls = 0;
+  const service = createForecastService({ ...cfg, cacheFile, cacheTtlMs: 60 * 60 * 1000 }, {
+    now: () => now,
+    fetchImpl: async () => { calls += 1; return { ok: false, status: 400 }; },
+    logger: { log() {}, warn() {} }
+  });
+  const fresh = await service.get();
+  assert.equal(calls, 0);
+  assert.equal(fresh.stale, false);
+  assert.equal(fresh.updatedAt, cached.iso);
+
+  const staleService = createForecastService({ ...cfg, cacheFile, cacheTtlMs: 5 * 60 * 1000 }, {
+    now: () => now,
+    fetchImpl: async () => { calls += 1; return { ok: false, status: 400 }; },
+    logger: { log() {}, warn() {} }
+  });
+  const stale = await staleService.get();
+  assert.equal(calls, 1);
+  assert.equal(stale.ok, true);
+  assert.equal(stale.stale, true);
+  assert.equal(stale.updatedAt, cached.iso);
+});
+
+test('并发首次请求共享同一次上游刷新', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gz-singleflight-test-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const cacheFile = path.join(dir, 'forecast.json');
+  let calls = 0;
+  const service = createForecastService({ ...cfg, cacheFile }, {
+    fetchImpl: async () => {
+      calls += 1;
+      return { ok: true, json: async () => ({ daily: syntheticDaily() }) };
+    },
+    logger: { log() {}, warn() {} }
+  });
+  const [a, b] = await Promise.all([service.get(), service.get()]);
+  assert.equal(calls, 1);
+  assert.equal(a.ok, true);
+  assert.equal(b.ok, true);
 });
