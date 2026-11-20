@@ -14,7 +14,6 @@
     "test": "node --test test/*.test.js",
     "data:export": "node scripts/export-data.mjs",
     "core:sync": "node scripts/sync-core.mjs",
-    "backtest": "node scripts/backtest.mjs",
     "check:page": "node scripts/check-page.mjs",
     "prestart": "node scripts/sync-core.mjs",
     "pretest": "node scripts/sync-core.mjs",
