@@ -10,7 +10,7 @@
 
 原始交付物是一个**单文件 HTML**（CSS/JS 全内联、无后端）。本仓库在不改动任何判定口径的前提下做了三件事：
 
-1. 把页面拆成 `public/index.html` + `app.css` + 三个按顺序加载的 JS 模块（core / charts / runtime，原单文件 JS 只做切分、未改逻辑）+ 内置快照数据；
+1. 把页面拆成 `public/index.html` + `app.css` + 四个按顺序加载的 JS 模块（core / backtest 数据 / charts / runtime，原单文件 JS 只做切分、未改逻辑）+ 内置快照数据；
 2. 从同一份模块自动截取出 Node 可导入的纯逻辑模块 `src/core/logic.js`（**不是重写**，见 `scripts/sync-core.mjs`）；
 3. 增加一个**可选**的 Node 服务（缓存、定时刷新、JSON API、静态托管）。没有它，页面仍可像原来一样直接访问 Open-Meteo 独立运行。
 
@@ -25,6 +25,7 @@
 │   └── assets/
 │       ├── app.css             # 全部样式（响应式）
 │       ├── app-core.js         # 常量、评分、四天窗口、风险与三档结论
+│       ├── app-backtest.js     # 回测数据常量 BT / BT_ORG / BT_LEADS（纯数据，无逻辑）
 │       ├── app-charts.js       # 图表、表格、日历、行程评估等渲染
 │       ├── app-runtime.js      # 取数、缓存、实况回填、boot 与事件绑定
 │       └── snapshot-data.js    # 2026-11-14 内置离线快照
@@ -37,7 +38,7 @@
 │   ├── forecast-service.js     # 单飞刷新、过期重抓、失败保留旧数据
 │   └── scheduler.js            # 定时刷新
 ├── scripts/
-│   ├── sync-core.mjs           # 三个前端模块 → src/core/logic.js
+│   ├── sync-core.mjs           # 四个前端模块 → src/core/logic.js
 │   ├── export-data.mjs         # 页面常量 → data/*.json
 │   └── check-page.mjs          # 静态检查（语法 + 关键结构）
 ├── data/                       # 已固化的数据资产（口径见 data/README.md）
@@ -46,7 +47,7 @@
 │   ├── weights.json            # 模型权重 / 机构映射 / 评分权重
 │   ├── sources.json            # 数据源清单
 │   ├── condition-matrix.json   # 天气现象评分矩阵
-│   ├── snapshot-*.json         # 离线快照
+│   ├── snapshot-*.json         # 离线快照（npm run data:export 生成，git 忽略）
 │   └── cache/                  # 运行时缓存（git 忽略）
 ├── test/                       # node:test 断言
 ├── .env.example
@@ -73,7 +74,7 @@ npm start             # http://127.0.0.1:8787
 
 ```bash
 npm test              # 12 项：窗口/判定/风险分级/权重/气候/回测结构/接口
-npm run check:page    # 三个 JS 模块语法 + 首页关键结构
+npm run check:page    # 四个 JS 模块语法 + 首页关键结构
 ```
 
 ---
@@ -198,7 +199,7 @@ heavy    = 重雨权重过半
 | GET | `/api/forecast` | `{updatedAt, stale, ageMinutes, days, windows}` |
 | GET | `/api/forecast/raw` | 聚合后的 `daily` 原始数组 |
 | GET | `/api/config` | 点位、天数、缓存 TTL |
-| GET | `/api/data/{name}` | `climatology` / `backtest` / `weights` / `sources` / `snapshot-2026-11-14` / `snapshot-raw` / `condition-matrix` / `confidence-levels` |
+| GET | `/api/data/{name}` | `climatology` / `backtest` / `weights` / `sources` / `condition-matrix` / `confidence-levels`；快照导出需先 `npm run data:export` |
 
 缓存策略：启动即刷一次；命中 6 小时内缓存不重复请求；刷新失败保留旧数据并标 `stale`；页面侧再兜底到内置快照。
 
@@ -215,16 +216,16 @@ heavy    = 重雨权重过半
 已验证通过：
 
 - `npm test`：**12/12 通过**（窗口数量与跨度、阴天零扣分、持续降雨判等待、单日小雨可考虑、风险分级、置信分层、权重合计 1.0 与 ECMWF 合并计票、ERA5 11 年、回测分层与 Brier 为 null、URL 参数、缺失模式覆盖、HTTP 接口与静态资源）。
-- `npm run check:page`：通过。
+- `npm run check:page`：通过（四个 JS 模块 + 首页结构）。
 - 服务端实跑：`/api/health` 返回 `stale:false`，缓存 16 天数据；首页截图确认首屏为 `11-27 出发 · 11-30 返程`、四天逐日天气、`建议继续等待`、`暂定`、`更新于 11-20 21:57`。
 
 尚未包含 / 需要接手注意：
 
-1. **126 个 Single Runs 原始响应与 `/tmp/backtest.py` 未随仓库提供**（原工作区为临时目录，已清理）。回测结论以 `data/backtest.json` 固化；重跑需按第 4.7 节与 `data/README.md` 的接口参数重新抓取，缺失日期不得补造。
+1. **126 个 Single Runs 原始响应与抓取脚本未随仓库提供**（原工作区为临时目录，已清理）。回测结论以 `data/backtest.json` 固化；重跑需按第 4.7 节与 `data/README.md` 的接口参数重新抓取，缺失日期不得补造。
 2. **Brier 分数为空**，原因见上；不要用模拟概率填充。
 3. 页面的旧版研究报告（01–07 节）仍保留在 `#evidence` 折叠区，作为数据依据；首屏已不展示。
 4. 浏览器缓存键 `gz_wx_v9` 与服务端缓存互相独立；换域名/清缓存后首屏会先显示内置快照再自动更新，属预期。
-5. Windows 侧另有一份旧副本，未纳入本仓库；以本仓库 `public/` 为准。
+5. `src/core/logic.js` 与 `data/snapshot-*.json` 为生成物，不入库；修改前端模块后跑 `npm test` 会先自动重建，不要直接编辑生成物。
 6. 线上页面当前仍是“浏览器直连 + localStorage”版本；本仓库的服务端模式需部署后才会生效。
 
 ---
