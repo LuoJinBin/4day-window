@@ -180,6 +180,25 @@ function applyObservedDay(day, observation, options={}){
   return out;
 }
 
+function completedHourlyRain(daily,hourly,now=new Date()){
+  if(!daily || !Array.isArray(daily.time) || !Array.isArray(daily.precipitation_sum)
+    || !hourly || !Array.isArray(hourly.time) || !Array.isArray(hourly.precipitation)) return null;
+  const today=chinaIso(now), parts=chinaParts(now), cut=today+'T'+parts.hour+':00';
+  let total=0, count=0;
+  for(let i=0;i<hourly.time.length;i++){
+    const t=hourly.time[i], v=hourly.precipitation[i];
+    if(typeof t!=='string' || v==null || !Number.isFinite(Number(v))
+      || t<today+'T06:00' || t>=cut) continue;
+    total+=Number(v); count++;
+  }
+  if(!count) return null;
+  const mm=Math.round(total*10)/10;
+  daily.__bornToday=mm;
+  const index=daily.time.indexOf(today);
+  if(index>=0) daily.precipitation_sum[index]=mm;
+  return {mm,hours:count};
+}
+
 function packDays(raw){
   return raw.map(d=>{
     const lead=d.lead!=null? d.lead : leadOf(d.date);
