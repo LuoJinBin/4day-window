@@ -1,0 +1,63 @@
+import { aggPoints, fromOpenMeteo, MDL } from '../src/core/logic.js';
+
+const DAILY = [
+  'weather_code',
+  'temperature_2m_max',
+  'temperature_2m_min',
+  'precipitation_sum',
+  'precipitation_probability_max',
+  'wind_speed_10m_max'
+];
+
+// 与页面 LIVE_URL 完全同参：四点多值 + 六模式 + Asia/Shanghai + 16 天。
+export function buildForecastUrl(cfg) {
+  const lat = cfg.points.map((p) => p.lat).join(',');
+  const lon = cfg.points.map((p) => p.lon).join(',');
+  const models = Object.keys(MDL).join(',');
+  const qs = [
+    'latitude=' + lat,
+    'longitude=' + lon,
+    'daily=' + DAILY.join(','),
+    'timezone=Asia%2FShanghai',
+    'forecast_days=' + cfg.forecastDays,
+    'models=' + models
+  ].join('&');
+  return cfg.forecastBase + '?' + qs;
+}
+
+// 返回 { view, rawDaily, fetchedAt }；view 即页面 render() 需要的结构。
+export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
+  const url = buildForecastUrl(cfg);
+  let json;
+  let lastErr;
+  // 多模式多点请求偶尔 503/超时：重试 3 次（1.5s 间隔），不改变请求参数。
+  for (let attempt = 0; attempt < 3 && !json; attempt += 1) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), cfg.requestTimeoutMs);
+    try {
+      const res = await fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json' } });
+      if (!res.ok) throw new Error('Open-Meteo HTTP ' + res.status);
+      json = await res.json();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (!json) throw lastErr || new Error('Open-Meteo 无响应');
+
+  const list = Array.isArray(json)
+    ? json.map((x) => x.daily).filter(Boolean)
+    : json && json.daily
+      ? [json.daily]
+      : [];
+  if (!list.length) throw new Error('Open-Meteo 返回无 daily 数据');
+
+  // 多点合成一份，与浏览器端 getDaily -> aggPoints 完全一致。
+  const daily = aggPoints(list);
+  const view = fromOpenMeteo({ daily });
+  if (!view || !view.days || !view.days.length) throw new Error('数据不足，无法生成日视图');
+
+  return { view, rawDaily: daily, fetchedAt: new Date().toISOString(), url };
+}
