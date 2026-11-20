@@ -14,6 +14,26 @@ const NEED = {
   '雨':{s:'rain', c:'r'}
 };
 const WD = ['周日','周一','周二','周三','周四','周五','周六'];
+const APP_TIME_ZONE='Asia/Shanghai';
+function chinaParts(value=new Date()){
+  const d=value instanceof Date? value : new Date(value);
+  if(!Number.isFinite(d.getTime())) throw new Error('无效日期');
+  const out={};
+  new Intl.DateTimeFormat('en-CA',{
+    timeZone:APP_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+  }).formatToParts(d).forEach(p=>{ if(p.type!=='literal') out[p.type]=p.value; });
+  return out;
+}
+function chinaIso(value=new Date()){
+  const p=chinaParts(value);
+  return p.year+'-'+p.month+'-'+p.day;
+}
+function chinaHour(value=new Date()){ return Number(chinaParts(value).hour); }
+function chinaStamp(value){
+  const p=chinaParts(value);
+  return Number(p.month)+'-'+p.day+' '+p.hour+':'+p.minute;
+}
 
 function median(a){const b=a.slice().sort((x,y)=>x-y);const n=b.length;return n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2}
 function dayScore(cs,hi,lo,popMax){
@@ -111,14 +131,55 @@ function buildWindows(days){
   out.sort((a,b)=> a.bad-b.bad || b.score-a.score);
   return out;
 }
-function leadOf(dateStr){
-  const now=new Date(); const today=isoOf(now);
+function leadOf(dateStr, now=new Date()){
   const mm=parseInt(dateStr.slice(0,2),10), dd=parseInt(dateStr.slice(3,5),10);
-  let y=now.getFullYear(); if(mm<now.getMonth()+1) y+=1;
-  const t=new Date(y+'-'+('0'+mm).slice(-2)+'-'+('0'+dd).slice(-2)+'T00:00:00');
-  const t0=new Date(today+'T00:00:00');
-  return Math.round((t-t0)/86400000);
+  if(!Number.isInteger(mm)||mm<1||mm>12||!Number.isInteger(dd)||dd<1||dd>31) return NaN;
+  const today=chinaParts(now), y=Number(today.year), currentMonth=Number(today.month);
+  const targetYear=mm<currentMonth? y+1 : y;
+  const target=Date.UTC(targetYear,mm-1,dd);
+  const base=Date.UTC(y,currentMonth-1,Number(today.day));
+  return Math.round((target-base)/86400000);
 }
+function applyObservedDay(day, observation, options={}){
+  const out=Object.assign({},day);
+  const mm=observation && observation.mm!=null? Number(observation.mm) : NaN;
+  if(!Number.isFinite(mm)) return out;
+  const isToday=options.isToday===true;
+  const hour=Number.isInteger(options.hour)? String(options.hour).padStart(2,'0') : '当前';
+  if(isToday && mm<1.0){
+    out.actualSoFar=true;
+    out.actualNote=mm>0
+      ? '截至 '+hour+':00 已累计 '+mm.toFixed(1)+'mm，尚未达到全天判雨阈值；剩余时段仍按预报'
+      : '截至 '+hour+':00 尚未观测到明显降雨；剩余时段仍按预报';
+    return out;
+  }
+  out.actual=true;
+  out.conf=3; out.confText='实况'; out.confWhy=isToday
+    ? '今天已观测到明显降雨，后续安排按已发生天气处理'
+    : '这一天已发生，用实际天气覆盖预报';
+  if(!isToday){
+    if(observation.hi!=null) out.hi=observation.hi;
+    if(observation.lo!=null) out.lo=observation.lo;
+  }
+  if(mm>=1.0){
+    out.rainy=true; out.modal='雨'; out.overcast=false;
+    out.ok=false; out.loose=false; out.trend=false; out.outReason='雨';
+    out.mist=false; out.rainLevel='明显';
+    out.actualNote='实况已下雨 '+mm.toFixed(1)+'mm';
+  }else{
+    out.rainy=false; out.rainLevel='无'; out.mist=false;
+    let cm=observation.code==null? null : codeToModal(observation.code);
+    if(cm==='雨') cm='多云';
+    if(cm) out.modal=cm; else if(out.modal==='雨') out.modal='多云';
+    out.overcast=out.modal==='阴';
+    out.ok=!out.thin && !out.overcast;
+    out.loose=!out.thin;
+    out.outReason=out.ok? '' : (out.overcast? '阴' : '');
+    out.actualNote=isToday? out.actualNote : (day.rainy? '预报有雨，实况未达到全天判雨阈值' : '实况未达到全天判雨阈值');
+  }
+  return out;
+}
+
 function packDays(raw){
   return raw.map(d=>{
     const lead=d.lead!=null? d.lead : leadOf(d.date);
@@ -222,8 +283,12 @@ let LAST_TS=null;
 function pad2n(n){ return ('0'+n).slice(-2); }
 function fmtStamp(v){
   if(v==null) return '—';
-  if(typeof v==='string') return v;
-  const d=new Date(v); return (d.getMonth()+1)+'-'+pad2n(d.getDate())+' '+pad2n(d.getHours())+':'+pad2n(d.getMinutes());
+  if(typeof v==='string'){
+    const parsed=Date.parse(v);
+    if(!Number.isFinite(parsed) || !v.includes('T')) return v;
+    v=parsed;
+  }
+  return chinaStamp(v);
 }
 function setUpdated(v){
   LAST_TS=v;
@@ -395,10 +460,7 @@ const W_SCORE={cma:.32,ecmwf:.20,qweather:.16,cmaweb:.16,moji:.12,eastday:.02,tw
 
 /* ---------- 日历 ---------- */
 let CUR=null;
-function isToday(mmdd){
-  const n=new Date();
-  return mmdd===(('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2));
-}
+function isToday(mmdd){ return mmdd===chinaIso().slice(5); }
 function renderCal(view){
   const days=view.days, wins=view.windows;
   document.querySelector('.calinner').style.setProperty('--n', days.length);
