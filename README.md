@@ -68,7 +68,7 @@ npm start             # http://127.0.0.1:8787
 ```
 
 - 只想要页面：把 `public/` 整个目录丢到任意静态托管即可。此时 `window.GZ_API_BASE` 为空，页面直连 Open-Meteo，并用浏览器 `localStorage`（键 `gz_wx_v9`，TTL 6 小时）缓存。
-- 想让页面走服务端缓存：用 `npm start`。服务端会把 `index.html` 里的 `window.GZ_API_BASE = ''` 替换为 `/api/forecast`，页面优先请求同源接口，失败自动回退直连。
+- 想让页面走服务端缓存：用 `npm start`。服务端会把 `index.html` 里的 `window.GZ_API_BASE = ''` 替换为 `/api/forecast`，页面优先请求同源接口，失败自动回退直连。所有日历日期、更新时间和实况截止时刻均固定使用 `Asia/Shanghai`，不受访问者电脑时区影响。
 
 测试与检查：
 
@@ -85,7 +85,7 @@ npm run check:page    # 四个 JS 模块语法 + 首页关键结构
 Open-Meteo（4 个城区点位 × 6 个数值模式，16 天）
         │  server/openmeteo.js（或浏览器 fetchLive）
         ▼
-aggPoints()  四点合成一份（天气现象取众数，温度/降水/风取中位）
+aggPoints()  四点合成一份（天气现象取众数；最低温取四点最低值；降水概率四点齐全时取中位数，否则取均值；其余数值字段取有效点均值）
         ▼
 fromOpenMeteo()  按模式汇总 → 每日 recs / 中位温度 / 中位降水 / pop / 模式覆盖数 n
         ▼
@@ -98,7 +98,7 @@ renderSimple()  首屏；renderRank/renderTrend/renderProb/renderAccV2 折叠区
 
 - 预报接口（页面与服务端同一条，参数逐字一致）：
   `https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=Asia%2FShanghai&forecast_days=16&models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless,cma_grapes_global,icon_seamless,meteofrance_seamless`
-- 实况回填：同接口加 `hourly=precipitation&past_days=7&forecast_days=1`，今天按 06:00 至当前逐小时累计 ≥1.0mm 判雨。
+- 实况回填：同接口加 `hourly=precipitation&past_days=7&forecast_days=1`，固定按广州时区 06:00 至当前已结束小时累计；当天累计达到 1.0mm 才确认已经下雨，未达到时保留当天剩余时段预报。
 - 历史再分析：`https://archive-api.open-meteo.com/v1/archive`（ERA5，UTC 日，广州 23.13N/113.26E，2015-01-01—2025-12-31）。
 - 回测：`https://single-runs-api.open-meteo.com/v1/forecast`，**必须** `timezone=UTC`、`run=<YYYY-MM-DD>T00:00`；`previous-runs-api` 只有最近 8 天带真实 pop。
 
@@ -201,7 +201,7 @@ heavy    = 重雨权重过半
 | GET | `/api/config` | 点位、天数、缓存 TTL |
 | GET | `/api/data/{name}` | `climatology` / `backtest` / `weights` / `sources` / `condition-matrix` / `confidence-levels`；快照导出需先 `npm run data:export` |
 
-缓存策略：启动即刷一次；命中 6 小时内缓存不重复请求；刷新失败保留旧数据并标 `stale`；页面侧再兜底到内置快照。
+缓存策略：启动和定时任务均先检查 TTL；命中有效缓存不重复请求；刷新失败保留旧数据并标 `stale`；页面不会把旧数据续期，也不会将过期缓存记入准确率历史。
 
 ### 部署
 
