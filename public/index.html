@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>广州 · 四天晴好窗口监测（阴天可放宽）</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2316636F'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23E3A63B'/%3E%3Cpath d='M2 26h28' stroke='%23F1F4F1' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
+<script src="https://fastly.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js';"></script>
+<link rel="stylesheet" href="./assets/app.css">
+
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="brand">广州 <span>/</span> 四天窗口监测</div>
+    <div class="mast-meta">广州中心城区 · 每天打开自动更新，直接给出发日期</div>
+  </div>
+</header>
+
+
+<section class="simple">
+  <div class="wrap">
+    <p class="s-kicker">广州 · 四天三晚</p>
+    <div class="s-head">
+      <div>
+        <h1 class="s-range" id="sRange">—</h1>
+        <p class="s-sub" id="sSub">—</p>
+      </div>
+      <div class="s-verdict" id="sVerdict"></div>
+    </div>
+    <p class="s-why" id="sWhy"></p>
+    <div class="s-days" id="sDays"></div>
+    <div class="s-alt" id="sAlt"></div>
+    <div class="s-foot">
+      <span class="s-stamp" id="sUpdated">—</span>
+      <button type="button" class="s-btn" id="btnEvidence" aria-expanded="false">查看数据依据</button>
+    </div>
+  </div>
+</section>
+
+<div class="evidence" id="evidence" hidden>
+<section class="verdict">
+  <div class="wrap">
+    <p class="kicker">现在怎么样</p>
+    <h1 id="h1">近 14 天 <span class="n">0</span> <span class="small">段能走的四天</span></h1>
+    <p class="vsub" id="vsub"></p>
+    <p class="vnote" id="vnote"></p>
+    <div class="statusbox">
+      <span><span class="dot" id="dot"></span> <span id="status">正在读取…</span></span>
+      <button id="btnRecalc" type="button">立即重算</button>
+      <span id="engine" style="margin-left:auto"></span>
+    </div>
+    <div class="confbox" id="confbox"></div>
+    <div class="twores" id="twores"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+</section>
+
+<div class="wrap">
+
+  <section class="sheet">
+    <div class="rail">
+      <div class="idx">01</div>
+      <h2 id="fh">为什么是 0<br>三个数字</h2>
+      <p>四天里只要有一天掉进雨里或阴天，整段就不算数——所以能连上的日子一直不多。</p>
+    </div>
+    <div class="body">
+      <div class="facts">
+        <div class="fact">
+          <div class="fn">最长连着几天</div>
+          <p id="f1">—</p>
+        </div>
+        <div class="fact">
+          <div class="fn">最湿的一天</div>
+          <p id="f2">—</p>
+        </div>
+        <div class="fact">
+          <div class="fn">阴占多少</div>
+          <p id="f3">—</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="rail">
+      <div class="idx">02</div>
+      <h2>每天什么样</h2>
+      <p>斜纹格子是没过的日子。点一天，能看到各家模式各自怎么报。</p>
+    </div>
+    <div class="body">
+      <div class="calwrap">
+        <div class="calinner">
+          <div class="band" id="band1"></div>
+          <div class="band" id="band2"></div>
+          <div class="cal" id="cal"></div>
+        </div>
+      </div>
+      <div class="panel" id="panel" hidden></div>
+      <p class="cap">每一格从上往下：日期、天气和温度、下雨概率，最后一条 0-100 的「适合出门」刻度，条越长越舒服。上面青色的带子是最接近的四天，琥珀色的次一档。「雨 43% · 1/2」这种写法，后面是几家报雨、几家有这份预报——11 月 25 号往后只有两家模式看得到，越远越只能当参考。</p>
+      <p class="calhint">左右滑动查看全部 14 天</p>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="rail">
+      <div class="idx">03</div>
+      <h2>四天怎么比</h2>
+      <p>先看四天里有几天没过，再看整体好不好；四天全过才算数。</p>
+    </div>
+    <div class="body">
+      <div class="chart" id="rankchart"></div>
+      <p class="cap" id="rankcap"></p>
+      <div class="trippick" id="trippick"></div>
+      <div class="trip" id="trip"></div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="rail">
+      <div class="idx">04</div>
+      <h2>各家模式各报了什么</h2>
+      <p>首屏每次重算，这张表跟着一起换，不会停在旧数据上。</p>
+    </div>
+    <div class="body">
+      <div class="mxwrap"><table class="mx" id="mx"></table></div>
+      <p class="cap">「一致」是几家报同一类天气。标红的是和当天多数派不一致的那一格。</p>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="rail">
+      <div class="idx">05</div>
+      <h2>温度与降水概率</h2>
+      <p>柱子越高，越可能下雨。灰色那段是当前最好的四天。</p>
+    </div>
+    <div class="body">
+      <div class="chart" id="trendchart"></div>
+      <p class="cap">柱子是各家报的降水概率，取其中最高的那个。两条实线是最高、最低温；细点线是其中一家单独的预报，用来看分歧。</p>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="rail">
+      <div class="idx">06</div>
+      <h2>什么时候才会有</h2>
+      <p>预报看不到那么远，就用过去 11 年的实际天气算概率。</p>
+    </div>
+    <div class="body">
+      <p class="vf" id="probtop"></p>
+      <table class="prob" id="probtab"></table>
+      <div class="chart" id="probchart" style="height:280px"></div>
+      <p class="cap">数据来源：Open-Meteo ERA5 再分析，广州 23.13°N 113.26°E，2015-01-01 到 2025-12-31 共 11 年、4018 天，缺失 0 天。公式：年份占比 = 命中年份数 ÷ 11。一个连续晴好段只在首次满四天时计一次，重叠的四天窗口不当独立事件。历史只能说明这个月机会大不大，具体哪天还得看预报。</p>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="rail">
+      <div class="idx">07</div>
+      <h2>报得准不准</h2>
+      <p>按真实起报时间回算，分提前天数、分模型打分，组合和单模型都摆出来。</p>
+    </div>
+    <div class="body">
+      <p class="vf" id="acctop2"></p>
+      <table class="prob" id="acctab2"></table>
+      <table class="prob" id="accm2" style="margin-top:16px"></table>
+      <table class="prob" id="accmm2" style="margin-top:16px"></table>
+      <p class="acc-note" id="accnote2"></p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <b>广州四天窗口监测</b>　只算广州中心城区：荔湾、越秀、天河、海珠四个位置合成一份，不分区。预报取六家数值模式：欧洲中心 ECMWF（含 AI 模式）、中国气象局 CMA、英国气象局 UKMO、德国 ICON、法国气象局 Météo-France，按各家在广州本地、同提前量的平衡准确率分权重；降水常年偏湿、容易虚报的美国 GFS 已剔除；历史概率是过去 11 年的实际天气。<br>
+    每次打开自动重算，6 小时内不重复请求；点「立即重算」立刻刷新。
+  </div>
+</footer>
+
+</div>
+
+<script src="./assets/snapshot-data.js"></script>
+
+<script>window.GZ_API_BASE = '';</script>
+<script src="./assets/app-core.js"></script>
+<script src="./assets/app-charts.js"></script>
+<script src="./assets/app-runtime.js"></script>
+
+</body>
+</html>
