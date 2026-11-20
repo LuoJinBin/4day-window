@@ -1,0 +1,364 @@
+function codeToModal(c){ if(c==null) return null; if(c===0||c===1) return '晴'; if(c===2) return '多云'; if(c===3||c===45||c===48) return '阴'; return '雨'; }
+function actualMap(){
+  const A={}; if(!ACTUAL||!ACTUAL.time) return A;
+  ACTUAL.time.forEach((iso,i)=>{ A[iso]={mm:ACTUAL.precipitation_sum[i], hi:ACTUAL.temperature_2m_max[i], lo:ACTUAL.temperature_2m_min[i], code:ACTUAL.weather_code[i]}; });
+  if(typeof ACTUAL.__bornToday==='number'){ const t=isoOf(new Date()); if(A[t]) A[t].born=ACTUAL.__bornToday; }
+  return A;
+}
+function applyActual(view){
+  const A=actualMap(); if(!view||!view.days) return;
+  const now=new Date(), y=now.getFullYear(), m0=now.getMonth()+1, todayIso=isoOf(now);
+  let touched=false;
+  view.days.forEach(d=>{
+    const mm=parseInt(d.date.slice(0,2),10);
+    const iso=(mm<m0? y+1 : y)+'-'+d.date;
+    const a=A[iso]; if(!a || iso>todayIso) return;
+    const wasRainy=d.rainy, thin=d.nOrg<2;
+    const mmUse=(iso===todayIso && typeof a.born==='number')? a.born : (a.mm||0);
+    const rain=mmUse>=1.0;
+    d.actual=true;
+    d.conf=3; d.confText='实况'; d.confWhy='这一天已发生，用实际天气覆盖预报';
+    if(a.hi!=null) d.hi=a.hi; if(a.lo!=null) d.lo=a.lo;
+    if(!rain){
+      d.rainy=false; d.rainLevel='无';
+      let cm=codeToModal(a.code);
+      if(cm==='雨') cm='多云';            // 实况没下，就不能再写雨
+      if(cm) d.modal=cm; else if(d.modal==='雨') d.modal='多云';
+      d.overcast = d.modal==='阴';
+      d.ok = !thin && !d.overcast;
+      d.loose = !thin;
+      d.outReason = d.ok? '' : (d.overcast? '阴' : '');
+      d.actualNote = wasRainy? '预报有雨，到现在没下' : '到现在没下';
+    }else{
+      d.rainy=true; d.modal='雨'; d.overcast=false; d.ok=false; d.loose=false; d.trend=false; d.outReason='雨';
+      d.rainLevel='明显';
+      d.actualNote='实况已下雨 '+mmUse.toFixed(1)+'mm';
+    }
+    touched=true;
+  });
+  if(touched) view.windows=buildWindows(view.days);
+}
+async function fetchActual(){
+  const ACT_URL='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
+   +'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum'
+   +'&hourly=precipitation'
+   +'&timezone=Asia%2FShanghai&past_days=7&forecast_days=1';
+  let js=null;
+  for(let a=0;a<3 && !js;a++){
+    const ctl=new AbortController(); const to=setTimeout(function(){ctl.abort();},22000);
+    try{
+      const r=await fetch(ACT_URL,{cache:'no-store',signal:ctl.signal});
+      if(r.ok) js=await r.json();
+    }catch(e){}
+    finally{ clearTimeout(to); }
+    if(!js) await new Promise(function(r){ setTimeout(r, 1200*(a+1)); });
+  }
+  if(!js) return null;
+  const arr=Array.isArray(js)? js : [js];
+  const dl=arr.filter(function(x){ return x.daily; });
+  if(!dl.length) return null;
+  const daily=aggPoints(dl.map(function(x){ return x.daily; }));
+  const hl=arr.filter(function(x){ return x.hourly; });
+  const hourly=hl.length? aggPoints(hl.map(function(x){ return x.hourly; })) : null;
+  if(hourly && hourly.precipitation && hourly.time){
+    const nowIso=isoOf(new Date()), hh=new Date().getHours();
+    const cut=nowIso+'T'+('0'+hh).slice(-2)+':00';
+    let born=0;
+    for(let i=0;i<hourly.time.length;i++){
+      const t=hourly.time[i], v=hourly.precipitation[i];
+      if(v==null) continue;
+      if(t>=nowIso+'T06:00' && t<=cut) born+=v;
+    }
+    daily.__bornToday=Math.round(born*10)/10;
+  }
+  return daily;
+}
+async function refreshActual(){
+  const d=await fetchActual(); if(d) ACTUAL=d;
+  if(VIEW && ACTUAL){ applyActual(VIEW); render(VIEW); }
+}
+
+/* ---------- 报得准不准（页面自己记、自己打分） ---------- */
+const HIST_KEY='gz_wx_hist_v1';
+function pad2(n){ return ('0'+n).slice(-2); }
+function isoOf(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function saveHist(view){
+  if(!view || view.src!=='live' || !view.days || !view.days.length) return;
+  let m={}; try{ m=JSON.parse(localStorage.getItem(HIST_KEY)||'{}'); }catch(e){ m={}; }
+  if(!m || typeof m!=='object' || Array.isArray(m)) m={};
+  m[isoOf(new Date())]={t:Date.now(), days:view.days.map(d=>({date:d.date, modal:d.modal, rainy:!!d.rainy, popMed:d.popMed, popMax:d.popMax, hi:d.hi, lo:d.lo}))};
+  const keys=Object.keys(m).sort();
+  while(keys.length>14){ delete m[keys.shift()]; }
+  try{ localStorage.setItem(HIST_KEY, JSON.stringify(m)); }catch(e){}
+}
+function wouldRain(d){ if(d.rainy!=null) return !!d.rainy; return /雨/.test(d.modal||'') || (d.popMed!=null && d.popMed>=70); }
+async function renderAcc(){
+  const top=document.getElementById('acctop');
+  if(!top) return;
+  const tab=document.getElementById('acctab'), cap=document.getElementById('acccap');
+  let daily=ACTUAL;
+  if(!daily || !daily.time){ top.innerHTML='实况取不到（离线或接口没响应），这一节先空着，下次打开再试。'; tab.innerHTML=''; if(cap) cap.textContent=''; return; }
+  const A={};
+  daily.time.forEach((iso,i)=>{ A[iso]={ mm: daily.precipitation_sum[i], hi: daily.temperature_2m_max[i], lo: daily.temperature_2m_min[i] }; });
+  let hist={}; try{ hist=JSON.parse(localStorage.getItem(HIST_KEY)||'{}'); }catch(e){ hist={}; }
+  const histKeys=Object.keys(hist).sort();
+  // 历史回看：只看"某天之前存的预报"对那天的预测
+  const rows=[];
+  Object.keys(A).sort().forEach(iso=>{
+    if(iso>=isoOf(new Date())) return;            // 今天和未来不算历史
+    const a=A[iso]; const mm=a.mm||0;
+    const key=histKeys.filter(k=> k<iso).pop();   // 上一个抓取日
+    const pred=key? (hist[key].days||[]).find(d=> d.date===iso.slice(5)) : null;
+    if(!pred) return;
+    const pRain=wouldRain(pred), aRain=mm>=0.5;
+    rows.push({iso:iso, from:key, pred:pred, pRain:pRain, aRain:aRain, hit:pRain===aRain,
+      dHi: (pred.hi!=null&&a.hi!=null)? Math.abs(pred.hi-a.hi) : null, mm:mm});
+  });
+  // 今天：拿当前这份预报对今天到现在为止的实况，先看个大概
+  const todayIso=isoOf(new Date());
+  const todayPred=(VIEW&&VIEW.days)? VIEW.days.find(d=> d.date===todayIso.slice(5)) : null;
+  const todayA=A[todayIso];
+
+  const hitN=rows.filter(r=>r.hit).length;
+  const hiErr=rows.filter(r=>r.dHi!=null).map(r=>r.dHi);
+  const avgErr=hiErr.length? (hiErr.reduce((x,y)=>x+y,0)/hiErr.length) : null;
+  let topText='';
+  if(rows.length){
+    topText='过去 '+rows.length+' 天里，有没有雨的判断报对了 <b>'+hitN+' 天</b>'
+      + (avgErr!=null? '，最高温平均差 <b>'+avgErr.toFixed(1)+'℃</b>': '') + '。';
+  }else{
+    topText='还没有可对照的历史：页面从今天起每天存一份预报，明天打开就能看到第一批打分。';
+  }
+  if(todayPred && todayA){
+    const tRain=(todayA.mm||0)>=0.5;
+    topText += ' 今天（'+todayIso.slice(5)+'）到现在'+(tRain? '下了 <b>'+((todayA.mm||0).toFixed(1))+'mm</b>' : '没下雨')
+      +'，最高 <b>'+Math.round(todayA.hi)+'°</b>'+(todayPred.actualNote? (todayPred.actualNote.indexOf('预报有雨')===0? '；预报本来报的是雨' : '；'+todayPred.actualNote) : '；页面报 '+todayPred.modal)+'。今天还没过完，只当个早检查。';
+  }
+  top.innerHTML=topText;
+
+  const body=rows.slice(-7).map(r=>{
+    const res = r.hit? '<b style="color:#2C7351">对</b>' : '<b style="color:#A8422A">错</b>';
+    return '<tr><td>'+r.iso.slice(5)+'</td><td>'+r.from.slice(5)+' 的预报</td>'
+      +'<td>'+(r.pRain?'有雨':'无雨')+'（'+r.pred.modal+'）</td>'
+      +'<td>'+(r.aRain? '有雨 '+(r.mm.toFixed(1))+'mm' : '无雨')+'</td>'
+      +'<td>'+(r.dHi!=null? r.dHi.toFixed(1)+'℃' : '—')+'</td><td>'+res+'</td></tr>';
+  }).join('');
+  tab.innerHTML = '<colgroup><col style="width:14%"><col style="width:22%"><col style="width:22%"><col style="width:20%"><col style="width:12%"><col style="width:10%"></colgroup>'
+    +'<thead><tr><th>日期</th><th>哪天的预报</th><th>当时怎么报</th><th>实际</th><th>温差</th><th>结果</th></tr></thead>'
+    +'<tbody>'+(body||'<tr><td colspan="6" style="color:#6C7C77">还没有记录</td></tr>')+'</tbody>';
+  if(cap) cap.textContent='实况取自 Open-Meteo 的逐日分析值（过去 7 天），判雨标准是当日降水 ≥0.5mm。只统计"预报在当天之前就存下来"的那几天，当天临时改口不算数。';
+
+}
+
+/* ---------- 实时重算 ---------- */
+const SNAP = {days: DATA.days.map(function(d){return Object.assign({},d,{wMap:W_SCORE});}), windows:null, src:'snapshot'};
+function snapshotView(){
+  const today=isoOf(new Date()).slice(5);
+  const days = packDays(DATA.days.filter(d=>d.date>=today));
+  return {days:days, windows:buildWindows(days), src:'snapshot'};
+}
+const SNAP_TIME='2026-11-19 12:30';
+const SNAP_RAW={"time":["2026-11-19","2026-11-20","2026-11-21","2026-11-22","2026-11-23","2026-11-24","2026-11-25","2026-11-26","2026-11-27","2026-11-28","2026-11-29","2026-11-30","2026-12-01","2026-12-02","2026-12-03","2026-12-04"],"weather_code_ecmwf_ifs025":[51,51,3,3,51,51,51,51,3,2,3,3,51,51,3,null],"temperature_2m_max_ecmwf_ifs025":[22.0,17.4,20.9,22.8,22.5,21.8,18.0,23.7,21.7,24.6,22.2,23.1,21.2,23.7,25.2,null],"temperature_2m_min_ecmwf_ifs025":[15.6,11.7,9.9,11.2,17.0,16.8,13.1,14.9,16.1,12.2,9.7,9.6,13.6,15.5,16.9,null],"precipitation_sum_ecmwf_ifs025":[0.2,3.9,0.1,0.0,2.8,20.9,5.8,2.1,0.2,0.0,0.0,0.0,2.8,1.5,0.0,null],"precipitation_probability_max_ecmwf_ifs025":[8.0,75.0,1.0,2.0,69.0,88.0,47.0,41.0,18.0,7.0,4.0,4.0,16.0,20.0,15.0,null],"wind_speed_10m_max_ecmwf_ifs025":[15.2,15.2,8.4,10.6,10.6,15.8,12.3,4.7,5.5,17.0,9.4,5.8,7.9,7.3,9.7,null],"weather_code_ecmwf_aifs025_single":[51,51,3,51,51,51,51,0,0,0,2,51,51,51,2,null],"temperature_2m_max_ecmwf_aifs025_single":[21.2,16.8,21.1,19.9,19.7,21.1,18.7,22.3,24.8,25.9,25.1,23.4,26.1,27.5,28.6,null],"temperature_2m_min_ecmwf_aifs025_single":[16.4,12.3,10.8,13.4,16.2,16.2,14.3,13.1,14.6,15.0,14.4,18.1,19.3,20.4,20.6,null],"precipitation_sum_ecmwf_aifs025_single":[0.8,7.2,0.9,0.0,3.0,12.6,0.2,0.2,0.0,0.0,0.0,0.5,0.8,0.3,0.0,0.8],"precipitation_probability_max_ecmwf_aifs025_single":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_ecmwf_aifs025_single":[16.9,18.6,11.7,9.0,15.9,21.8,13.5,7.3,6.9,11.5,10.1,9.0,9.5,5.4,10.5,null],"weather_code_ukmo_seamless":[3,3,3,3,51,51,51,null,null,null,null,null,null,null,null,null],"temperature_2m_max_ukmo_seamless":[22.2,18.7,22.2,22.7,25.3,22.8,16.0,null,null,null,null,null,null,null,null,null],"temperature_2m_min_ukmo_seamless":[16.0,14.4,11.9,14.7,18.6,14.3,12.6,null,null,null,null,null,null,null,null,null],"precipitation_sum_ukmo_seamless":[0.0,0.0,0.0,0.0,0.4,13.8,2.4,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_ukmo_seamless":[0.0,22.0,0.0,11.0,72.0,78.0,23.0,6.0,17.0,10.0,null,null,null,null,null,null],"wind_speed_10m_max_ukmo_seamless":[15.3,16.5,10.9,10.8,10.2,18.0,12.8,null,null,null,null,null,null,null,null,null],"weather_code_cma_grapes_global":[2,51,2,2,51,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_max_cma_grapes_global":[20.6,16.7,19.6,20.1,21.1,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_min_cma_grapes_global":[15.8,13.4,9.9,12.5,17.2,null,null,null,null,null,null,null,null,null,null,null],"precipitation_sum_cma_grapes_global":[0.0,3.6,0.2,0.0,0.3,null,null,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_cma_grapes_global":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_cma_grapes_global":[21.9,21.3,12.3,10.3,14.2,null,null,null,null,null,null,null,null,null,null,null],"weather_code_icon_seamless":[3,51,3,3,3,3,51,null,null,null,null,null,null,null,null,null],"temperature_2m_max_icon_seamless":[21.2,16.6,20.1,17.7,16.8,18.2,14.7,null,null,null,null,null,null,null,null,null],"temperature_2m_min_icon_seamless":[16.0,12.0,11.3,14.1,15.9,14.4,10.4,null,null,null,null,null,null,null,null,null],"precipitation_sum_icon_seamless":[0.0,7.1,0.0,0.0,0.4,0.7,21.7,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_icon_seamless":[6.5,81.5,3.0,4.0,49.0,59.0,61.0,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_icon_seamless":[12.8,10.2,9.1,4.5,5.8,15.9,10.3,null,null,null,null,null,null,null,null,null],"weather_code_meteofrance_seamless":[3,51,3,3,null,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_max_meteofrance_seamless":[20.6,19.1,20.9,21.5,null,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_min_meteofrance_seamless":[16.4,11.7,10.4,11.8,null,null,null,null,null,null,null,null,null,null,null,null],"precipitation_sum_meteofrance_seamless":[0.0,7.0,0.0,0.0,null,null,null,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_meteofrance_seamless":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_meteofrance_seamless":[22.4,25.1,14.3,12.5,null,null,null,null,null,null,null,null,null,null,null,null]};
+const CACHE_KEY='gz_wx_v9', TTL=6*3600*1000;
+let VIEW=null;
+
+function setStatus(kind,text,engine){
+  const dot=document.getElementById('dot');
+  dot.className='dot'+(kind==='warn'?' warn':kind==='err'?' err':'');
+  document.getElementById('status').textContent=text;
+  if(engine!==undefined) document.getElementById('engine').textContent=engine;
+}
+function render(view){
+  VIEW=view;
+  document.getElementById('h1').textContent='';
+  renderSimple(view); hero(view); renderFacts(view); renderCal(view); renderRank(view); renderTripUI(view); renderTrend(view); renderMatrix(view); renderAccV2(); wrapTables(); saveHist(view);
+}
+
+const MDL = {'ecmwf_ifs025':'ECMWF','ecmwf_aifs025_single':'ECMWF-AI','ukmo_seamless':'UKMO','cma_grapes_global':'CMA','icon_seamless':'ICON','meteofrance_seamless':'Météo-FR'};
+const W_MDL = {'ecmwf_ifs025':0.18,'ecmwf_aifs025_single':0.18,'cma_grapes_global':0.16,'ukmo_seamless':0.16,'icon_seamless':0.14,'meteofrance_seamless':0.18};
+const ORG = {'ecmwf_ifs025':'ECMWF','ecmwf_aifs025_single':'ECMWF','ukmo_seamless':'UKMO','cma_grapes_global':'CMA','icon_seamless':'ICON','meteofrance_seamless':'MF'};
+const ORG_NAME = {'ECMWF':'欧洲中心','UKMO':'英国气象局','CMA':'中国气象局','ICON':'德国 DWD','MF':'法国气象局'};
+const MODEL_TOTAL = 6, ORG_TOTAL = 5;
+const CONF_TXT = ['仅趋势','低','中','高'];
+const LEAD_TXT = function(lead){ return lead<=3? '短期（1–3 天）' : lead<=7? '中期（4–7 天）' : lead<=10? '趋势参考（8–10 天）' : '低置信趋势（11–15 天）'; };
+const CODE = (c)=> c===0||c===1?['晴','晴']: c===2?['多云','多云']: c===3||c===45||c===48?['阴','阴']
+  : c<=57?['小雨','雨']: c<=67?['中雨','雨']: c<=77?['小雨','雨']: c<=82?['阵雨','雨']
+  : c<=86?['阵雨','雨']: ['雷阵雨','雨'];
+
+function fromOpenMeteo(json){
+  const d=json.daily, t=d.time; if(!t) return null;
+  const models=Object.keys(MDL);
+  const recsByDay=t.map(()=>([]));
+  models.forEach(m=>{
+    const code=d['weather_code_'+m], hi=d['temperature_2m_max_'+m], lo=d['temperature_2m_min_'+m],
+          mm=d['precipitation_sum_'+m], pp=d['precipitation_probability_max_'+m],
+          wd=d['wind_speed_10m_max_'+m];
+    if(!code) return;
+    t.forEach((_,i)=>{
+      if(code[i]==null || !hi || hi[i]==null) return;   // 这家当天没数据：记为缺失，不当作晴或无雨
+      const [lb]=CODE(code[i]);
+      recsByDay[i].push({p:m,name:MDL[m],cond:lb,hi:hi[i],lo:lo?lo[i]:null,
+        pop: pp? (pp[i]==null?null:Math.round(pp[i])) : null,
+        mm: mm? mm[i] : null,
+        wind: wd? wd[i] : null, out:false});
+    });
+  });
+  const days=t.map((iso,i)=>{
+    const dt=new Date(iso+'T00:00:00');
+    const recs=recsByDay[i].filter(r=>r.hi!=null);
+    return {date:iso.slice(5), wd:WD[dt.getDay()], recs:recs};
+  });
+  if(days.length<6) return null;
+  const built=packDays(days);
+  return {days:built, windows:buildWindows(built), src:'live'};
+}
+
+function loadCache(){
+  try{
+    const raw=localStorage.getItem(CACHE_KEY); if(!raw) return null;
+    const o=JSON.parse(raw);
+    if(!o||!o.ts||!o.view||!o.view.days) return null;
+    return o;
+  }catch(e){ return null; }
+}
+function saveCache(view){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts:Date.now(), view:view})); }catch(e){}
+}
+function hm(ts){ const d=new Date(ts); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+
+const API_BASE='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
+ +'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max'
+ +'&timezone=Asia%2FShanghai&forecast_days=16';
+const API_GROUPS=['&models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless',
+                  '&models=cma_grapes_global,icon_seamless,meteofrance_seamless'];
+function aggPoints(list){
+  if(!list.length) return null;
+  if(list.length===1) return list[0];
+  const out={time:list[0].time};
+  Object.keys(list[0]).forEach(function(k){
+    if(k==='time') return;
+    if(k.indexOf('weather_code')===0){
+      out[k]=list[0].time.map(function(_,i){
+        const v={};
+        list.forEach(function(d){ const c=d[k]? d[k][i]:null; if(c==null) return; const lb=CODE(c)[0]; v[lb]=(v[lb]||0)+1; });
+        let best=null, bn=-1;
+        Object.keys(v).forEach(function(lb){ if(v[lb]>bn){bn=v[lb];best=lb;} });
+        return best==null? null : (best==='晴'?0:best==='多云'?2:best==='阴'?3:51);
+      });
+    }else{
+      const isMin = /temperature_2m_min/.test(k);
+      const isPop = /precipitation_probability/.test(k);
+      out[k]=list[0].time.map(function(_,i){
+        const vals=list.map(function(d){ return d[k]? d[k][i]:null; }).filter(function(x){ return x!=null; })
+          .sort(function(a,b){ return a-b; });
+        if(!vals.length) return null;
+        if(isMin) return vals[0];
+        if(isPop) return vals.length===4? Math.round((vals[1]+vals[2])/2*10)/10 : Math.round(vals.reduce(function(a,b){return a+b;},0)/vals.length*10)/10;
+        return Math.round(vals.reduce(function(a,b){ return a+b; },0)/vals.length*10)/10;
+      });
+    }
+  });
+  return out;
+}
+async function getDaily(url,ms){
+  const ctl=new AbortController(); const to=setTimeout(function(){ctl.abort();},ms);
+  try{
+    const r=await fetch(url,{cache:'no-store',signal:ctl.signal});
+    if(!r.ok) return null;
+    const j=await r.json();
+    const arr=Array.isArray(j)? j.map(function(x){return x.daily;}).filter(Boolean) : (j && j.daily? [j.daily] : []);
+    return arr.length? aggPoints(arr) : null;
+  }catch(e){ return null; }
+  finally{ clearTimeout(to); }
+}
+function mergeDaily(list){
+  const out={time:list[0].time};
+  list.forEach(function(d){ Object.keys(d).forEach(function(k){ if(k!=='time') out[k]=d[k]; }); });
+  return {daily:out};
+}
+const LIVE_URL=API_BASE+'&models='+Object.keys(MDL).join(',');
+async function fetchLive(){
+  // 有同源后端时优先走 /api/forecast（带服务端缓存）；否则保持原来的浏览器直连 Open-Meteo。
+  if(typeof window!=='undefined' && window.GZ_API_BASE){
+    try{
+      const r=await fetch(window.GZ_API_BASE,{cache:'no-store'});
+      if(r.ok){
+        const j=await r.json();
+        if(j && j.days && j.days.length) return {days:j.days,windows:j.windows,src:'live'};
+      }
+    }catch(e){}
+  }
+  let d=null;
+  for(let a=0;a<2 && !d;a++){
+    d=await getDaily(LIVE_URL,14000);
+    if(!d) await new Promise(function(r){ setTimeout(r,1500); });
+  }
+  if(!d) throw new Error('数据源没响应');
+  const v=fromOpenMeteo({daily:d});
+  if(!v) throw new Error('数据不足');
+  return v;
+}
+
+async function boot(){
+  const btn=document.getElementById('btnRecalc');
+  // 先给出内置的今日预报，网络慢也不至于空白；取到新数据再替换
+  const built=fromOpenMeteo({daily:SNAP_RAW});
+  setUpdated('内置 '+SNAP_TIME);
+  render(built || snapshotView());
+  setStatus('warn','正在取新预报，先看着 '+SNAP_TIME+' 这份…','内置');
+  const cache=loadCache();
+  if(cache && Date.now()-cache.ts < TTL){
+    setUpdated(cache.ts);
+    render(snapshotFromCache(cache.view));
+    setStatus('ok','缓存 '+hm(cache.ts)+' 的结果 · 有效至 '+hm(cache.ts+TTL),'数据：Open-Meteo 六模式');
+    btn.disabled=false;
+    return;
+  }
+  btn.disabled=true;
+  setStatus('warn','正在取六家模式的最新预报，先看着上面这份…','首次加载');
+  try{
+    const v=await fetchLive();
+    setUpdated(Date.now());
+    render(v); saveCache({days:v.days, windows:v.windows});
+    setStatus('ok','刚刚重算 · '+hm(Date.now())+' · 6 小时内不再请求','数据：ECMWF / UKMO / CMA 等六家');
+  }catch(err){
+    const stale=loadCache();
+    if(stale && Date.now()-stale.ts < 2*24*3600*1000){
+      setUpdated(stale.ts);
+      render(snapshotFromCache(stale.view));
+      setStatus('err','这次没取到新数据（'+(err.message||'网络不通')+'），先看 '+hm(stale.ts)+' 那次的结果','旧数据');
+    }else{
+      setUpdated('内置 '+SNAP_TIME);
+      render(built || snapshotView());
+      setStatus('err','这次没取到新数据（'+(err.message||'网络不通')+'），下面是 '+SNAP_TIME+' 抓的预报','内置');
+    }
+  }finally{ btn.disabled=false; refreshActual(); fetchRainHours(VIEW); }
+}
+function snapshotFromCache(view){
+  const days=view.days.map(d=>Object.assign({},d,{recs:d.recs||[],
+    outReason: d.outReason!=null? d.outReason : (d.ok?'':(d.rainy?'雨':'阴')),
+    loose: d.loose!=null? d.loose : (!d.rainy && d.popMed<40)}));
+  return {days:days, windows:buildWindows(days), src:'live'};
+}
+document.getElementById('btnRecalc').addEventListener('click',async function(){
+  this.disabled=true; setStatus('warn','正在重算…');
+  try{
+    const v=await fetchLive(); setUpdated(Date.now()); render(v); saveCache({days:v.days,windows:v.windows});
+    setStatus('ok','刚刚重算完成 · '+hm(Date.now()),'数据：ECMWF / UKMO / CMA 等七家');
+  }catch(err){
+    setStatus('err','重算失败（'+(err.message||'网络不通')+'），继续显示屏幕上这一次的结果','离线');
+  }finally{ this.disabled=false; refreshActual(); }
+});
+
+document.getElementById('btnEvidence').addEventListener('click',function(){
+  const ev=document.getElementById('evidence');
+  const opening=ev.hasAttribute('hidden');
+  if(opening){ ev.removeAttribute('hidden'); this.textContent='收起数据依据'; this.setAttribute('aria-expanded','true'); }
+  else { ev.setAttribute('hidden',''); this.textContent='查看数据依据'; this.setAttribute('aria-expanded','false'); }
+  if(opening && VIEW){ try{ renderRank(VIEW); renderTrend(VIEW); renderProb(); renderTripUI(VIEW); wrapTables(); }catch(e){} }
+  this.scrollIntoView({behavior:'smooth',block:'start'});
+});
+
+renderMatrix(window.VIEW); renderProb();
+window.addEventListener('load',function(){ if(window.echarts && window.VIEW){ try{ renderRank(VIEW); renderTrend(VIEW); renderProb(); }catch(e){} } });
+boot();
