@@ -42,7 +42,7 @@ export function parsePoints(raw) {
 
 export const config = {
   port: intEnv('PORT', 8787, 1, 65535),
-  host: process.env.HOST && process.env.HOST.trim() ? process.env.HOST.trim() : '127.0.0.1',
+  host: process.env.HOST && process.env.HOST.trim() ? process.env.HOST.trim() : '0.0.0.0',
   cacheTtlMs: intEnv('CACHE_TTL_MINUTES', 360, 5, 1440) * 60 * 1000,
   refreshMinutes: intEnv('REFRESH_INTERVAL_MINUTES', 360, 5, 1440),
   cacheFile: process.env.CACHE_FILE || path.join(ROOT, 'data/cache/forecast.json'),
