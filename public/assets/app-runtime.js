@@ -83,7 +83,7 @@ const HIST_KEY='gz_wx_hist_v1';
 function pad2(n){ return ('0'+n).slice(-2); }
 function isoOf(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
 function saveHist(view){
-  if(!view || view.src!=='live' || !view.days || !view.days.length) return;
+  if(!view || view.src!=='live' || view.stale || !view.days || !view.days.length) return;
   let m={}; try{ m=JSON.parse(localStorage.getItem(HIST_KEY)||'{}'); }catch(e){ m={}; }
   if(!m || typeof m!=='object' || Array.isArray(m)) m={};
   m[isoOf(new Date())]={t:Date.now(), days:view.days.map(d=>({date:d.date, modal:d.modal, rainy:!!d.rainy, popMed:d.popMed, popMax:d.popMax, hi:d.hi, lo:d.lo}))};
@@ -221,8 +221,9 @@ function loadCache(){
     return o;
   }catch(e){ return null; }
 }
-function saveCache(view){
-  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts:Date.now(), view:view})); }catch(e){}
+function saveCache(view, ts){
+  const stamp=Number.isFinite(ts)? ts : Date.now();
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts:stamp, view:view})); }catch(e){}
 }
 function hm(ts){ const d=new Date(ts); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
 
@@ -278,13 +279,20 @@ function mergeDaily(list){
 }
 const LIVE_URL=API_BASE+'&models='+Object.keys(MDL).join(',');
 async function fetchLive(){
-  // 有同源后端时优先走 /api/forecast（带服务端缓存）；否则保持原来的浏览器直连 Open-Meteo。
+  // 优先使用服务端缓存，但保留其真实更新时间；过期时再尝试浏览器直连。
+  let staleServer=null;
   if(typeof window!=='undefined' && window.GZ_API_BASE){
     try{
       const r=await fetch(window.GZ_API_BASE,{cache:'no-store'});
       if(r.ok){
         const j=await r.json();
-        if(j && j.days && j.days.length) return {days:j.days,windows:j.windows,src:'live'};
+        if(j && j.days && j.days.length){
+          const meta=forecastMeta(j);
+          const serverView={days:j.days,windows:j.windows,src:'live',
+            updatedAt:meta.updatedAt,stale:meta.stale,ageMinutes:meta.ageMinutes};
+          if(!meta.stale) return serverView;
+          staleServer=serverView;
+        }
       }
     }catch(e){}
   }
@@ -293,10 +301,35 @@ async function fetchLive(){
     d=await getDaily(LIVE_URL,14000);
     if(!d) await new Promise(function(r){ setTimeout(r,1500); });
   }
+  if(!d && staleServer) return staleServer;
   if(!d) throw new Error('数据源没响应');
   const v=fromOpenMeteo({daily:d});
-  if(!v) throw new Error('数据不足');
+  if(!v) {
+    if(staleServer) return staleServer;
+    throw new Error('数据不足');
+  }
+  v.updatedAt=Date.now();
+  v.stale=false;
+  v.ageMinutes=0;
   return v;
+}
+
+function applyForecastResult(v){
+  const now=Date.now();
+  const hasUpdatedAt=Number.isFinite(v && v.updatedAt);
+  const ts=hasUpdatedAt? v.updatedAt : null;
+  setUpdated(ts==null? (v && v.stale? '未知' : now) : ts);
+  render(v);
+  if(v && v.stale){
+    const age=Number.isFinite(v.ageMinutes)? Math.round(v.ageMinutes) : null;
+    setStatus('warn','实时预报暂不可用，显示服务端旧缓存 · '+(age==null?'更新时间未知':age+' 分钟前更新'),'旧缓存');
+    return;
+  }
+  const stamp=ts==null? now : ts;
+  saveCache({days:v.days,windows:v.windows},stamp);
+  const age=Math.max(0,Math.round((now-stamp)/60000));
+  const label=age<=1? '刚刚重算 · '+hm(stamp) : '数据更新于 '+hm(stamp)+' · '+age+' 分钟前';
+  setStatus('ok',label+' · 缓存有效期按原更新时间计算','数据：ECMWF / UKMO / CMA 等六家');
 }
 
 async function boot(){
@@ -312,15 +345,15 @@ async function boot(){
     render(snapshotFromCache(cache.view));
     setStatus('ok','缓存 '+hm(cache.ts)+' 的结果 · 有效至 '+hm(cache.ts+TTL),'数据：Open-Meteo 六模式');
     btn.disabled=false;
+    refreshActual();
+    fetchRainHours(VIEW);
     return;
   }
   btn.disabled=true;
   setStatus('warn','正在取六家模式的最新预报，先看着上面这份…','首次加载');
   try{
     const v=await fetchLive();
-    setUpdated(Date.now());
-    render(v); saveCache({days:v.days, windows:v.windows});
-    setStatus('ok','刚刚重算 · '+hm(Date.now())+' · 6 小时内不再请求','数据：ECMWF / UKMO / CMA 等六家');
+    applyForecastResult(v);
   }catch(err){
     const stale=loadCache();
     if(stale && Date.now()-stale.ts < 2*24*3600*1000){
@@ -343,11 +376,11 @@ function snapshotFromCache(view){
 document.getElementById('btnRecalc').addEventListener('click',async function(){
   this.disabled=true; setStatus('warn','正在重算…');
   try{
-    const v=await fetchLive(); setUpdated(Date.now()); render(v); saveCache({days:v.days,windows:v.windows});
-    setStatus('ok','刚刚重算完成 · '+hm(Date.now()),'数据：ECMWF / UKMO / CMA 等七家');
+    const v=await fetchLive();
+    applyForecastResult(v);
   }catch(err){
     setStatus('err','重算失败（'+(err.message||'网络不通')+'），继续显示屏幕上这一次的结果','离线');
-  }finally{ this.disabled=false; refreshActual(); }
+  }finally{ this.disabled=false; refreshActual(); fetchRainHours(VIEW); }
 });
 
 document.getElementById('btnEvidence').addEventListener('click',function(){
