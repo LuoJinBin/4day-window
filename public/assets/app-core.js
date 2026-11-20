@@ -230,6 +230,14 @@ function setUpdated(v){
   const el=document.getElementById('sUpdated');
   if(el) el.textContent='更新于 '+fmtStamp(v);
 }
+function forecastMeta(payload, now=Date.now()){
+  const raw=payload && payload.updatedAt;
+  const ts=typeof raw==='number'? raw : (typeof raw==='string'? Date.parse(raw) : NaN);
+  const valid=Number.isFinite(ts);
+  const rawAge=payload && payload.ageMinutes!=null? Number(payload.ageMinutes) : NaN;
+  const age=Number.isFinite(rawAge) && rawAge>=0 ? rawAge : (valid? Math.max(0,Math.round((now-ts)/60000)) : null);
+  return {updatedAt:valid?ts:null,stale:!payload || payload.stale===true || !valid,ageMinutes:age};
+}
 function riskOf(d){
   if(d.rainy || d.rainLevel==='明显') return (d.mmMed!=null && d.mmMed>=10)? 3 : 3;
   if(d.mist || d.rainLevel==='零星') return 2;
