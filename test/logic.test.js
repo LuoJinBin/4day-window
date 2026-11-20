@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SNAP, buildWindows, verdictOf, winPen, riskOf, confTier,
+  SNAP, buildWindows, verdictOf, winPen, riskOf, confTier, forecastMeta,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
 
@@ -56,6 +56,34 @@ test('置信度分层只取高/中/低', () => {
   assert.equal(confTier(day({ conf: 3 })), 3);
   assert.equal(confTier(day({ conf: 2 })), 2);
   assert.equal(confTier(day({ conf: 1 })), 1);
+});
+
+test('服务端预报元数据保留真实更新时间与缓存年龄', () => {
+  const now = Date.parse('2026-11-20T12:00:00.000Z');
+  const updatedAt = Date.parse('2026-11-20T10:00:00.000Z');
+  const meta = forecastMeta({
+    updatedAt: '2026-11-20T10:00:00.000Z',
+    stale: false,
+    ageMinutes: 120
+  }, now);
+  assert.equal(meta.updatedAt, updatedAt);
+  assert.equal(meta.stale, false);
+  assert.equal(meta.ageMinutes, 120);
+});
+
+test('过期或缺少更新时间的服务端数据不能被当作新预报', () => {
+  const now = Date.parse('2026-11-20T12:00:00.000Z');
+  const stale = forecastMeta({
+    updatedAt: '2026-11-20T05:00:00.000Z',
+    stale: true,
+    ageMinutes: 420
+  }, now);
+  assert.equal(stale.stale, true);
+  assert.equal(stale.updatedAt, Date.parse('2026-11-20T05:00:00.000Z'));
+
+  const missing = forecastMeta({ stale: false }, now);
+  assert.equal(missing.stale, true);
+  assert.equal(missing.updatedAt, null);
 });
 
 test('模型权重合计 1.0，ECMWF 两个产品按一家机构计票', () => {

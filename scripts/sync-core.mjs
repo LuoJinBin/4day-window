@@ -61,7 +61,7 @@ while (i < app.length) {
 const coreBody = app.slice(0, i);
 
 const EXPORTS = [
-  'median', 'dayScore', 'metrics', 'buildWindows', 'packDays',
+  'median', 'forecastMeta', 'dayScore', 'metrics', 'buildWindows', 'packDays',
   'riskOf', 'riskText', 'wxWord', 'confTier', 'confWhy',
   'winPen', 'verdictOf', 'tripVerdict',
   'fromOpenMeteo', 'aggPoints', 'mergeDaily', 'snapshotView',
