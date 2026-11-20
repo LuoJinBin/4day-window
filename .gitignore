@@ -1,0 +1,32 @@
+# 依赖
+node_modules/
+
+# 本地配置与密钥（绝不提交）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+cookies.txt
+
+# 运行缓存与日志
+data/cache/
+*.log
+logs/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# 测试 / 构建临时产物
+coverage/
+dist/
+*.tmp
+*.png
+!public/assets/**/*.png
+
+# 自动生成的 Node 核心模块（由 npm install / npm test / npm start 重新生成）
+src/core/logic.js

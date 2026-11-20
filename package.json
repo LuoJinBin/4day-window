@@ -1,0 +1,30 @@
+{
+  "name": "guangzhou-4day-window",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "广州未来连续四天适宜出行窗口监测：多模式预报、窗口判定、ERA5 气候统计与回测",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --env-file-if-exists=.env --watch server/index.js",
+    "test": "node --test test/*.test.js",
+    "data:export": "node scripts/export-data.mjs",
+    "core:sync": "node scripts/sync-core.mjs",
+    "backtest": "node scripts/backtest.mjs",
+    "check:page": "node scripts/check-page.mjs",
+    "prestart": "node scripts/sync-core.mjs",
+    "pretest": "node scripts/sync-core.mjs",
+    "predata:export": "node scripts/sync-core.mjs",
+    "postinstall": "node scripts/sync-core.mjs"
+  },
+  "files": [
+    "public",
+    "src",
+    "server",
+    "data"
+  ]
+}
