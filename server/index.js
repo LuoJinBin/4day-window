@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import config, { ROOT } from './config.js';
 import { createForecastService } from './forecast-service.js';
 import { buildWindows } from '../src/core/logic.js';
@@ -196,7 +197,7 @@ export function createApp(cfg = config, deps = {}) {
   return server;
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const server = createApp();
   server.listen(config.port, config.host, () => {
     console.log('广州四天窗口监测 · http://' + config.host + ':' + config.port);
