@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "source": "Open-Meteo ERA5 再分析",
+    "point": "广州 23.13°N 113.26°E",
+    "from": "2015-01-01",
+    "to": "2025-12-31",
+    "years": 11,
+    "missingDays": 0
+  },
+  "months": {
+    "1": { "years": 11, "hitStrict": 3, "hitLoose": 10, "strictYears": [2015, 2019, 2025], "looseYears": [2015, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025], "nDays": 341, "okDays": 68, "windows": 3, "rateStrict": 0.2727, "rateLoose": 0.9091 },
+    "2": { "years": 11, "hitStrict": 4, "hitLoose": 11, "strictYears": [2016, 2017, 2021, 2023], "looseYears": [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025], "nDays": 311, "okDays": 41, "windows": 4, "rateStrict": 0.3636, "rateLoose": 1 },
+    "3": { "years": 11, "hitStrict": 3, "hitLoose": 11, "strictYears": [2018, 2023, 2025], "looseYears": [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025], "nDays": 341, "okDays": 21, "windows": 3, "rateStrict": 0.2727, "rateLoose": 1 },
+    "4": { "years": 11, "hitStrict": 0, "hitLoose": 9, "strictYears": [], "looseYears": [2015, 2017, 2018, 2019, 2020, 2021, 2022, 2024, 2025], "nDays": 330, "okDays": 16, "windows": 0, "rateStrict": 0, "rateLoose": 0.8182 },
+    "5": { "years": 11, "hitStrict": 0, "hitLoose": 8, "strictYears": [], "looseYears": [2016, 2017, 2018, 2020, 2022, 2023, 2024, 2025], "nDays": 341, "okDays": 4, "windows": 0, "rateStrict": 0, "rateLoose": 0.7273 },
+    "6": { "years": 11, "hitStrict": 0, "hitLoose": 2, "strictYears": [], "looseYears": [2015, 2020], "nDays": 330, "okDays": 1, "windows": 0, "rateStrict": 0, "rateLoose": 0.1818 },
+    "7": { "years": 11, "hitStrict": 1, "hitLoose": 6, "strictYears": [2022], "looseYears": [2015, 2016, 2017, 2020, 2022, 2023], "nDays": 341, "okDays": 13, "windows": 1, "rateStrict": 0.0909, "rateLoose": 0.5455 },
+    "8": { "years": 11, "hitStrict": 1, "hitLoose": 3, "strictYears": [2015], "looseYears": [2015, 2017, 2022], "nDays": 341, "okDays": 8, "windows": 1, "rateStrict": 0.0909, "rateLoose": 0.2727 },
+    "9": { "years": 11, "hitStrict": 1, "hitLoose": 5, "strictYears": [2019], "looseYears": [2016, 2017, 2019, 2021, 2022], "nDays": 330, "okDays": 23, "windows": 2, "rateStrict": 0.0909, "rateLoose": 0.4545 },
+    "10": { "years": 11, "hitStrict": 3, "hitLoose": 11, "strictYears": [2017, 2018, 2019], "looseYears": [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025], "nDays": 341, "okDays": 52, "windows": 4, "rateStrict": 0.2727, "rateLoose": 1 },
+    "11": { "years": 11, "hitStrict": 1, "hitLoose": 11, "strictYears": [2019], "looseYears": [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025], "nDays": 330, "okDays": 55, "windows": 1, "rateStrict": 0.0909, "rateLoose": 1 },
+    "12": { "years": 11, "hitStrict": 1, "hitLoose": 11, "strictYears": [2020], "looseYears": [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025], "nDays": 341, "okDays": 72, "windows": 1, "rateStrict": 0.0909, "rateLoose": 1 }
+  }
+}
