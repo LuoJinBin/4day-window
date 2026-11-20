@@ -2,38 +2,24 @@ function codeToModal(c){ if(c==null) return null; if(c===0||c===1) return '晴';
 function actualMap(){
   const A={}; if(!ACTUAL||!ACTUAL.time) return A;
   ACTUAL.time.forEach((iso,i)=>{ A[iso]={mm:ACTUAL.precipitation_sum[i], hi:ACTUAL.temperature_2m_max[i], lo:ACTUAL.temperature_2m_min[i], code:ACTUAL.weather_code[i]}; });
-  if(typeof ACTUAL.__bornToday==='number'){ const t=isoOf(new Date()); if(A[t]) A[t].born=ACTUAL.__bornToday; }
+  if(typeof ACTUAL.__bornToday==='number'){ const t=chinaIso(); if(A[t]) A[t].born=ACTUAL.__bornToday; }
   return A;
 }
 function applyActual(view){
   const A=actualMap(); if(!view||!view.days) return;
-  const now=new Date(), y=now.getFullYear(), m0=now.getMonth()+1, todayIso=isoOf(now);
+  const today=chinaParts(), y=Number(today.year), m0=Number(today.month), todayIso=chinaIso();
   let touched=false;
   view.days.forEach(d=>{
     const mm=parseInt(d.date.slice(0,2),10);
     const iso=(mm<m0? y+1 : y)+'-'+d.date;
     const a=A[iso]; if(!a || iso>todayIso) return;
-    const wasRainy=d.rainy, thin=d.nOrg<2;
-    const mmUse=(iso===todayIso && typeof a.born==='number')? a.born : (a.mm||0);
-    const rain=mmUse>=1.0;
-    d.actual=true;
-    d.conf=3; d.confText='实况'; d.confWhy='这一天已发生，用实际天气覆盖预报';
-    if(a.hi!=null) d.hi=a.hi; if(a.lo!=null) d.lo=a.lo;
-    if(!rain){
-      d.rainy=false; d.rainLevel='无';
-      let cm=codeToModal(a.code);
-      if(cm==='雨') cm='多云';            // 实况没下，就不能再写雨
-      if(cm) d.modal=cm; else if(d.modal==='雨') d.modal='多云';
-      d.overcast = d.modal==='阴';
-      d.ok = !thin && !d.overcast;
-      d.loose = !thin;
-      d.outReason = d.ok? '' : (d.overcast? '阴' : '');
-      d.actualNote = wasRainy? '预报有雨，到现在没下' : '到现在没下';
-    }else{
-      d.rainy=true; d.modal='雨'; d.overcast=false; d.ok=false; d.loose=false; d.trend=false; d.outReason='雨';
-      d.rainLevel='明显';
-      d.actualNote='实况已下雨 '+mmUse.toFixed(1)+'mm';
-    }
+    const isToday=iso===todayIso;
+    // 当天只使用已经结束的小时实况；没有小时数据时绝不拿“全天预报总雨量”冒充实况。
+    if(isToday && typeof a.born!=='number') return;
+    const mmUse=isToday? a.born : a.mm;
+    if(mmUse==null) return;
+    const next=applyObservedDay(d,{mm:mmUse,code:a.code,hi:a.hi,lo:a.lo},{isToday,hour:Number(today.hour)});
+    Object.assign(d,next);
     touched=true;
   });
   if(touched) view.windows=buildWindows(view.days);
@@ -61,27 +47,30 @@ async function fetchActual(){
   const hl=arr.filter(function(x){ return x.hourly; });
   const hourly=hl.length? aggPoints(hl.map(function(x){ return x.hourly; })) : null;
   if(hourly && hourly.precipitation && hourly.time){
-    const nowIso=isoOf(new Date()), hh=new Date().getHours();
-    const cut=nowIso+'T'+('0'+hh).slice(-2)+':00';
-    let born=0;
+    const now=chinaParts(), nowIso=chinaIso();
+    const cut=nowIso+'T'+now.hour+':00';
+    let born=0, observedHours=0;
     for(let i=0;i<hourly.time.length;i++){
       const t=hourly.time[i], v=hourly.precipitation[i];
-      if(v==null) continue;
-      if(t>=nowIso+'T06:00' && t<=cut) born+=v;
+      // 当前小时尚未结束，不能把该小时的预报值计入“已经下过的雨”。
+      if(v==null || t<nowIso+'T06:00' || t>=cut) continue;
+      born+=v; observedHours++;
     }
-    daily.__bornToday=Math.round(born*10)/10;
+    if(observedHours>0) daily.__bornToday=Math.round(born*10)/10;
   }
   return daily;
 }
 async function refreshActual(){
-  const d=await fetchActual(); if(d) ACTUAL=d;
-  if(VIEW && ACTUAL){ applyActual(VIEW); render(VIEW); }
+  try{
+    const d=await fetchActual(); if(d) ACTUAL=d;
+    if(VIEW && ACTUAL){ applyActual(VIEW); render(VIEW); }
+  }catch(err){ console.warn('[actual] refresh failed:',err && err.message? err.message:err); }
 }
 
 /* ---------- 报得准不准（页面自己记、自己打分） ---------- */
 const HIST_KEY='gz_wx_hist_v1';
 function pad2(n){ return ('0'+n).slice(-2); }
-function isoOf(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function isoOf(d){ return chinaIso(d); }
 function saveHist(view){
   if(!view || view.src!=='live' || view.stale || !view.days || !view.days.length) return;
   let m={}; try{ m=JSON.parse(localStorage.getItem(HIST_KEY)||'{}'); }catch(e){ m={}; }
@@ -217,7 +206,8 @@ function loadCache(){
   try{
     const raw=localStorage.getItem(CACHE_KEY); if(!raw) return null;
     const o=JSON.parse(raw);
-    if(!o||!o.ts||!o.view||!o.view.days) return null;
+    if(!o||!Number.isFinite(o.ts)||o.ts<=0||o.ts>Date.now()+5*60*1000
+      ||!o.view||!Array.isArray(o.view.days)||!o.view.days.length) return null;
     return o;
   }catch(e){ return null; }
 }
@@ -225,7 +215,7 @@ function saveCache(view, ts){
   const stamp=Number.isFinite(ts)? ts : Date.now();
   try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts:stamp, view:view})); }catch(e){}
 }
-function hm(ts){ const d=new Date(ts); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+function hm(ts){ const p=chinaParts(ts); return p.hour+':'+p.minute; }
 
 const API_BASE='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
  +'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max'
@@ -342,7 +332,7 @@ async function boot(){
   const cache=loadCache();
   if(cache && Date.now()-cache.ts < TTL){
     setUpdated(cache.ts);
-    render(snapshotFromCache(cache.view));
+    render(snapshotFromCache(cache.view,{updatedAt:cache.ts,stale:false,ageMinutes:Math.max(0,Math.round((Date.now()-cache.ts)/60000))}));
     setStatus('ok','缓存 '+hm(cache.ts)+' 的结果 · 有效至 '+hm(cache.ts+TTL),'数据：Open-Meteo 六模式');
     btn.disabled=false;
     refreshActual();
@@ -358,7 +348,7 @@ async function boot(){
     const stale=loadCache();
     if(stale && Date.now()-stale.ts < 2*24*3600*1000){
       setUpdated(stale.ts);
-      render(snapshotFromCache(stale.view));
+      render(snapshotFromCache(stale.view,{updatedAt:stale.ts,stale:true,ageMinutes:Math.max(0,Math.round((Date.now()-stale.ts)/60000))}));
       setStatus('err','这次没取到新数据（'+(err.message||'网络不通')+'），先看 '+hm(stale.ts)+' 那次的结果','旧数据');
     }else{
       setUpdated('内置 '+SNAP_TIME);
@@ -367,11 +357,13 @@ async function boot(){
     }
   }finally{ btn.disabled=false; refreshActual(); fetchRainHours(VIEW); }
 }
-function snapshotFromCache(view){
+function snapshotFromCache(view, meta={}){
   const days=view.days.map(d=>Object.assign({},d,{recs:d.recs||[],
     outReason: d.outReason!=null? d.outReason : (d.ok?'':(d.rainy?'雨':'阴')),
     loose: d.loose!=null? d.loose : (!d.rainy && d.popMed<40)}));
-  return {days:days, windows:buildWindows(days), src:'live'};
+  return {days:days,windows:buildWindows(days),src:'live',
+    updatedAt:Number.isFinite(meta.updatedAt)?meta.updatedAt:null,
+    stale:meta.stale===true,ageMinutes:Number.isFinite(meta.ageMinutes)?meta.ageMinutes:null};
 }
 document.getElementById('btnRecalc').addEventListener('click',async function(){
   this.disabled=true; setStatus('warn','正在重算…');
