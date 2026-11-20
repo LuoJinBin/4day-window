@@ -206,7 +206,7 @@ async function fetchRainHours(view){
     const iso=t.slice(0,10), hh=parseInt(t.slice(11,13),10);
     let sum=0,cnt=0;
     arr.forEach(p=>{ const v=p.hourly.precipitation[i]; if(v!=null){ sum+=v; cnt++; } });
-    if(!cnt) return;
+    if(!cnt) continue;
     const avg=sum/cnt;
     if(avg>=0.2){ (byDay[iso]=byDay[iso]||[]).push(hh); }
   }
@@ -219,6 +219,7 @@ async function fetchRainHours(view){
     if(st!=null) runs.push([st,pr]);
     d.rainHours=runs.map(r=> ('0'+r[0]).slice(-2)+(r[0]===r[1]?' 时':'–'+('0'+(r[1]+1)).slice(-2)+' 时'));
   });
+  if(typeof VIEW!=='undefined' && VIEW===view) renderTripUI(view);
 }
 /* ---------- 备选（放宽档：阴天也算，只要不下雨） ---------- */
 function renderAlts(view){
@@ -300,7 +301,7 @@ function monthStats(m){
 function renderProb(){
   const order=[11,12,1,2,3,4,5,6,7,8,9,10];
   const st={}; order.forEach(m=>st[m]=monthStats(m));
-  const m0=new Date().getMonth()+1;
+  const m0=Number(chinaParts().month);
   const cur=st[m0];
   document.getElementById('probtop').innerHTML =
     '按「晴或多云、日雨量小于 1mm」这个标准往回翻 11 年：<b>'+m0+' 月</b>一共只有 <b>'+cur.hitStrict+' 年</b>出现过至少一段四天连晴，'
