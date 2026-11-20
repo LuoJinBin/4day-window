@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SNAP, buildWindows, verdictOf, winPen, riskOf, confTier, forecastMeta,
-  chinaParts, chinaIso, leadOf, applyObservedDay, aggPoints,
+  chinaParts, chinaIso, leadOf, applyObservedDay, completedHourlyRain, aggPoints,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
 
@@ -94,6 +94,20 @@ test('广州日期与小时固定使用 Asia/Shanghai，不受访问者电脑时
   assert.equal(chinaParts(instant).minute, '30');
   assert.equal(leadOf('11-21', instant), 0);
   assert.equal(leadOf('11-22', instant), 1);
+});
+
+test('当天只累计已经结束的小时，并同步修正当天实况雨量', () => {
+  const daily={time:['2026-11-20','2026-11-21'],precipitation_sum:[99,0]};
+  const hourly={
+    time:['2026-11-20T05:00','2026-11-20T06:00','2026-11-20T07:00',
+      '2026-11-20T08:00','2026-11-20T12:00','2026-11-20T13:00'],
+    precipitation:[4,0.1,0.2,null,0.5,9]
+  };
+  const result=completedHourlyRain(daily,hourly,new Date('2026-11-20T05:30:00.000Z'));
+  assert.deepEqual(result,{mm:0.8,hours:3});
+  assert.equal(daily.__bornToday,0.8);
+  assert.equal(daily.precipitation_sum[0],0.8);
+  assert.equal(daily.precipitation_sum[1],0);
 });
 
 test('当天实况未达到判雨阈值时保留剩余时段预报', () => {
