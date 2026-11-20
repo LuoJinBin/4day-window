@@ -1,0 +1,43 @@
+{
+  "models": {
+    "ecmwf_ifs025": 0.18,
+    "ecmwf_aifs025_single": 0.18,
+    "cma_grapes_global": 0.16,
+    "ukmo_seamless": 0.16,
+    "icon_seamless": 0.14,
+    "meteofrance_seamless": 0.18
+  },
+  "models_meta": {
+    "ecmwf_ifs025": "ECMWF",
+    "ecmwf_aifs025_single": "ECMWF-AI",
+    "ukmo_seamless": "UKMO",
+    "cma_grapes_global": "CMA",
+    "icon_seamless": "ICON",
+    "meteofrance_seamless": "Météo-FR"
+  },
+  "organizations": {
+    "ecmwf_ifs025": "ECMWF",
+    "ecmwf_aifs025_single": "ECMWF",
+    "ukmo_seamless": "UKMO",
+    "cma_grapes_global": "CMA",
+    "icon_seamless": "ICON",
+    "meteofrance_seamless": "MF"
+  },
+  "organization_names": {
+    "ECMWF": "欧洲中心",
+    "UKMO": "英国气象局",
+    "CMA": "中国气象局",
+    "ICON": "德国 DWD",
+    "MF": "法国气象局"
+  },
+  "model_total": 6,
+  "score_weights": {
+    "cma": 0.32,
+    "ecmwf": 0.2,
+    "qweather": 0.16,
+    "cmaweb": 0.16,
+    "moji": 0.12,
+    "eastday": 0.02,
+    "twc": 0.02
+  }
+}

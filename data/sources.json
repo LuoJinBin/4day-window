@@ -1,0 +1,50 @@
+[
+  [
+    "中央气象台",
+    "7 天 + 3 小时精细",
+    "32%",
+    "https://www.nmc.cn/publish/forecast/AGD/guangzhou.html"
+  ],
+  [
+    "ECMWF HRES 9km",
+    "逐日降水/日照/风",
+    "20%",
+    "https://mirror-earth.com/wea_forecast/440100"
+  ],
+  [
+    "和风天气",
+    "15 天 / 30 天",
+    "16%",
+    "https://www.qweather.com/weather/guangzhou-101280101.html"
+  ],
+  [
+    "中国天气网",
+    "15 天",
+    "16%",
+    "https://www.weather.com.cn/weather/101280101.shtml"
+  ],
+  [
+    "墨迹天气",
+    "降水概率/雨量/湿度",
+    "12%",
+    "https://tianqi.moji.com/weather/china/guangdong/guangzhou"
+  ],
+  [
+    "东方天气",
+    "15 天（偏差大）",
+    "2%",
+    "https://tianqi.eastday.com/guangzhou/15/"
+  ],
+  [
+    "Weather.com",
+    "10 天（TWC/GFS）",
+    "2%",
+    "https://weather.com/weather/tenday/l/Guangzhou+Guangdong+China"
+  ],
+  [
+    "ERA5 再分析",
+    "11 年逐日历史",
+    "—",
+    "https://open-meteo.com/en/docs/historical-weather-api"
+  ]
+]
