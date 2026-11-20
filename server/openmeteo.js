@@ -36,10 +36,15 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
     const timer = setTimeout(() => ctl.abort(), cfg.requestTimeoutMs);
     try {
       const res = await fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json' } });
-      if (!res.ok) throw new Error('Open-Meteo HTTP ' + res.status);
+      if (!res.ok) {
+        const err = new Error('Open-Meteo HTTP ' + res.status);
+        if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) err.nonRetryable = true;
+        throw err;
+      }
       json = await res.json();
     } catch (err) {
       lastErr = err;
+      if (err && err.nonRetryable) throw err;
       if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
     } finally {
       clearTimeout(timer);
@@ -53,6 +58,18 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
       ? [json.daily]
       : [];
   if (!list.length) throw new Error('Open-Meteo 返回无 daily 数据');
+  if (list.length > 8) throw new Error('Open-Meteo 返回点位过多');
+  list.forEach((daily, index) => {
+    if (!Array.isArray(daily.time) || daily.time.length < 6) {
+      throw new Error('Open-Meteo 第 ' + (index + 1) + ' 个点位缺少有效日期序列');
+    }
+    for (let i = 0; i < daily.time.length; i += 1) {
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(daily.time[i])
+        || (i > 0 && daily.time[i] <= daily.time[i - 1])) {
+        throw new Error('Open-Meteo 第 ' + (index + 1) + ' 个点位日期无效或未递增');
+      }
+    }
+  });
 
   // 多点合成一份，与浏览器端 getDaily -> aggPoints 完全一致。
   const daily = aggPoints(list);
