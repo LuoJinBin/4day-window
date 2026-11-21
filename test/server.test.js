@@ -290,3 +290,20 @@ test('Vercel health handler confirms the function is reachable', async () => {
   assert.equal(res.statusCode, 200);
   assert.equal(JSON.parse(res.body).ok, true);
 });
+
+
+test('Open-Meteo 429 exposes the upstream reason and is not retried immediately', async () => {
+  let calls = 0;
+  await assert.rejects(fetchForecast(cfg, {
+    fetchImpl: async () => {
+      calls += 1;
+      return {
+        ok: false,
+        status: 429,
+        headers: { get: (name) => name.toLowerCase() === 'retry-after' ? '60' : null },
+        text: async () => JSON.stringify({ reason: 'API request limit exceeded' })
+      };
+    }
+  }), /Open-Meteo HTTP 429: API request limit exceeded \(Retry-After 60\)/);
+  assert.equal(calls, 1);
+});
