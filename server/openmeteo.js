@@ -37,8 +37,26 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
     try {
       const res = await fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json' } });
       if (!res.ok) {
-        const err = new Error('Open-Meteo HTTP ' + res.status);
-        if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) err.nonRetryable = true;
+        let detail = '';
+        if (typeof res.text === 'function') {
+          try { detail = String(await res.text()).replace(/\\s+/g, ' ').trim(); } catch {}
+        }
+        try {
+          const parsed = detail ? JSON.parse(detail) : null;
+          if (parsed && typeof parsed === 'object') {
+            detail = parsed.reason || parsed.message || parsed.error || detail;
+          }
+        } catch {}
+        const retryAfter = res.headers && typeof res.headers.get === 'function'
+          ? res.headers.get('retry-after')
+          : null;
+        const suffix = detail ? ': ' + String(detail).slice(0, 240) : '';
+        const retryNote = retryAfter ? ' (Retry-After ' + String(retryAfter).slice(0, 40) + ')' : '';
+        const err = new Error('Open-Meteo HTTP ' + res.status + suffix + retryNote);
+        // A 429 is an upstream quota/rate-limit response: retrying immediately only adds load.
+        if (res.status === 429 || (res.status >= 400 && res.status < 500 && res.status !== 408)) {
+          err.nonRetryable = true;
+        }
         throw err;
       }
       json = await res.json();
