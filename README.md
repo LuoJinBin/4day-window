@@ -195,7 +195,7 @@ heavy    = 重雨权重过半
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/health` | 缓存时间、是否过期、最近错误 |
+| GET | `/api/health` | Vercel：函数存活状态与运行区；本地 Node：缓存时间、是否过期、最近错误 |
 | GET | `/api/forecast` | `{updatedAt, stale, ageMinutes, days, windows}` |
 | GET | `/api/forecast/raw` | 聚合后的 `daily` 原始数组 |
 | GET | `/api/config` | 点位、天数、缓存 TTL |
@@ -205,8 +205,10 @@ heavy    = 重雨权重过半
 
 ### 部署
 
-- 静态：上传 `public/`（Nginx / 对象存储 / 飞书应用托管均可）。
-- 服务：`npm start`；默认监听 `0.0.0.0:8787`，适用于容器和 Render。生产服务需要可写的 `data/cache/`；单进程即可，定时器进程内运行，无需 cron。
+- **Vercel Production**：静态页面 + `api/forecast.js`、`api/health.js` 两个 Node Functions。`vercel.json` 为预报函数设置 `hkg1` 区域与 60 秒最长运行时间；函数使用 `/tmp/gz-weather-forecast.json` 和实例内存缓存。生产域名：`https://guangzhou-4day-window.vercel.app/`。
+- **自动部署状态**：GitHub 私有仓库尚未连接 Vercel Git 自动部署；当前线上版本由 `fix/full-hardening` 分支固定提交手动上传。后续源码更新后必须重新部署，不能只 push 就认为线上已更新。
+- **本地/容器服务**：`npm start`；默认监听 `0.0.0.0:8787`，适用于容器和 Render。生产服务需要可写的 `data/cache/`；单进程即可，定时器进程内运行，无需 cron。
+- **纯静态托管**：只上传 `public/` 时，页面会尝试 `/api/forecast`，若接口不存在则回退浏览器直连；在无法直连 Open-Meteo 的网络环境下，天气刷新会失败。
 - 继续用豆包 HTML 应用发布时：`lark-cli apps +deploy --file-path "<相对路径>" --app-id app_17j5a7evesj`，再用 `+release-get` 轮询到 `finished`。注意 `--file-path` 只收相对 cwd 的路径，且必须与 `cd` 同一条命令。
 
 ---
@@ -215,9 +217,9 @@ heavy    = 重雨权重过半
 
 已验证通过：
 
-- `npm test`：**12/12 通过**（窗口数量与跨度、阴天零扣分、持续降雨判等待、单日小雨可考虑、风险分级、置信分层、权重合计 1.0 与 ECMWF 合并计票、ERA5 11 年、回测分层与 Brier 为 null、URL 参数、缺失模式覆盖、HTTP 接口与静态资源）。
+- `npm test`：**33/33 通过**，覆盖窗口排序、工作日偏好、服务端预报缓存、Vercel API 方法限制/错误处理、Open-Meteo 429 限流诊断、历史统计、回测、HTTP 与页面结构。
 - `npm run check:page`：通过（四个 JS 模块 + 首页结构）。
-- 服务端实跑：`/api/health` 返回 `stale:false`，缓存 16 天数据；首页截图确认首屏为 `11-27 出发 · 11-30 返程`、四天逐日天气、`建议继续等待`、`暂定`、`更新于 11-20 21:57`。
+- Vercel Production 实跑：`/api/health` HTTP 200；`/api/forecast` HTTP 200，`stale:false`、16 天、13 个四天窗口、首日覆盖 5 家机构；线上首页 HTTP 200，已配置同源 `/api/forecast`。
 
 尚未包含 / 需要接手注意：
 
@@ -226,7 +228,8 @@ heavy    = 重雨权重过半
 3. 页面的旧版研究报告（01–07 节）仍保留在 `#evidence` 折叠区，作为数据依据；首屏已不展示。
 4. 浏览器缓存键 `gz_wx_v9` 与服务端缓存互相独立；换域名/清缓存后首屏会先显示内置快照再自动更新，属预期。
 5. `src/core/logic.js` 与 `data/snapshot-*.json` 为生成物，不入库；修改前端模块后跑 `npm test` 会先自动重建，不要直接编辑生成物。
-6. 线上页面当前仍是“浏览器直连 + localStorage”版本；本仓库的服务端模式需部署后才会生效。
+6. 线上 Vercel 已启用同源服务端 `/api/forecast`，不是纯浏览器直连；GitHub 自动部署未接通，后续更新仍需手动部署。
+7. Open-Meteo HTTP 429 会返回上游限流原因与 `Retry-After`，不再立即重试造成请求风暴；免费接口按出口 IP 有日额度，若更改 Vercel 函数区域，必须重新验收天气接口。
 
 ---
 
