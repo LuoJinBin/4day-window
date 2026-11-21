@@ -7,6 +7,7 @@ import { SNAP } from '../src/core/logic.js';
 import { createForecastService } from '../server/forecast-service.js';
 import { writeCache } from '../server/cache.js';
 import { startScheduler } from '../server/scheduler.js';
+import { createForecastHandler, createHealthHandler } from '../server/vercel-handlers.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -222,4 +223,70 @@ test('并发首次请求共享同一次上游刷新', async (t) => {
   assert.equal(calls, 1);
   assert.equal(a.ok, true);
   assert.equal(b.ok, true);
+});
+
+
+function responseRecorder() {
+  return {
+    headers: {},
+    statusCode: 0,
+    body: '',
+    setHeader(name, value) { this.headers[name.toLowerCase()] = String(value); },
+    end(body = '') { this.body = body; }
+  };
+}
+
+test('Vercel forecast handler serves JSON and gates forced refresh', async () => {
+  const calls = [];
+  const service = {
+    get: async (options) => {
+      calls.push(options);
+      return {
+        ok: true,
+        stale: false,
+        ageMinutes: 0,
+        updatedAt: '2026-11-21T05:00:00.000Z',
+        view: { days: SNAP.days, windows: [] }
+      };
+    }
+  };
+  const handler = createForecastHandler(service);
+  const res = responseRecorder();
+  await handler({ method: 'GET', url: '/api/forecast?force=1' }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['cache-control'], 'no-store');
+  assert.equal(res.headers['x-content-type-options'], 'nosniff');
+  assert.deepEqual(calls, [{ force: false }]);
+  const payload = JSON.parse(res.body);
+  assert.equal(payload.days.length, SNAP.days.length);
+  assert.deepEqual(payload.windows, []);
+
+  const forced = responseRecorder();
+  await createForecastHandler(service, { allowForceRefresh: true })(
+    { method: 'GET', url: '/api/forecast?force=1' }, forced
+  );
+  assert.deepEqual(calls[1], { force: true });
+});
+
+test('Vercel forecast handler rejects writes and reports upstream failures', async () => {
+  const methodRes = responseRecorder();
+  await createForecastHandler({ get: async () => { throw new Error('must not run'); } })(
+    { method: 'POST', url: '/api/forecast' }, methodRes
+  );
+  assert.equal(methodRes.statusCode, 405);
+  assert.equal(methodRes.headers.allow, 'GET, HEAD');
+
+  const failureRes = responseRecorder();
+  await createForecastHandler({
+    get: async () => ({ ok: false, status: 503, error: 'Open-Meteo HTTP 503' })
+  })({ method: 'GET', url: '/api/forecast' }, failureRes);
+  assert.equal(failureRes.statusCode, 503);
+  assert.equal(JSON.parse(failureRes.body).stale, true);
+});
+
+test('Vercel health handler confirms the function is reachable', async () => {
+  const res = responseRecorder();
+  createHealthHandler()({ method: 'GET', url: '/api/health' }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).ok, true);
 });
