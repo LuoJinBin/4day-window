@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SNAP, buildWindows, verdictOf, winPen, riskOf, confTier, forecastMeta,
+  SNAP, buildWindows, rankTripWindows, verdictOf, winPen, riskOf, confTier, forecastMeta,
   chinaParts, chinaIso, leadOf, applyObservedDay, completedHourlyRain, aggPoints,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
@@ -176,4 +176,54 @@ test('回测保留 1/3/5/7/10 天分层，且不伪造 Brier', () => {
     assert.equal(row.models.ecmwf_ifs025.brier, null);
     assert.equal(row.ens.brier, null);
   }
+});
+
+
+test('天气分数接近时，四天窗口优先减少周末日', () => {
+  const rows = [
+    ['11-23', '周一', 80], ['11-24', '周二', 80],
+    ['11-25', '周三', 80], ['11-26', '周四', 80],
+    ['11-27', '周五', 83], ['11-28', '周六', 83],
+    ['11-29', '周日', 83], ['11-30', '周一', 83]
+  ];
+  const windows = buildWindows(rows.map(([date, wd, score]) => day({ date, wd, score })));
+  const firstWeekend = windows.findIndex((w) => w.wk > 0);
+  assert.ok(firstWeekend > 0);
+  assert.ok(windows.slice(0, firstWeekend).every((w) => w.wk === 0));
+});
+
+test('天气优势明显时，不为避开周末而选择明显更差的窗口', () => {
+  const rows = [
+    ['11-23', '周一', 60], ['11-24', '周二', 60],
+    ['11-25', '周三', 60], ['11-26', '周四', 60],
+    ['11-27', '周五', 90], ['11-28', '周六', 90],
+    ['11-29', '周日', 90], ['11-30', '周一', 90]
+  ];
+  const windows = buildWindows(rows.map(([date, wd, score]) => day({ date, wd, score })));
+  assert.equal(windows[0].start, '11-27');
+  assert.equal(windows[0].wk, 2);
+});
+
+const tripWindow = (start, wk, firstLow) => ({
+  start,
+  wk,
+  days: ['11-28', '11-29', '11-30', '12-01'].map((date, i) => day({
+    date,
+    wd: ['周六', '周日', '周一', '周二'][i],
+    hi: 23,
+    lo: i === 0 ? firstLow : 18,
+    conf: 2
+  }))
+});
+
+test('首屏行程推荐在天气惩罚接近时优先周末日更少的窗口', () => {
+  const weekend = tripWindow('11-28', 2, 18);
+  const weekday = tripWindow('12-01', 0, 10);
+  assert.equal(rankTripWindows([weekend, weekday]).start, '12-01');
+});
+
+test('首屏行程推荐不会为了避开周末而选择明显更差的天气', () => {
+  const weekend = tripWindow('11-28', 2, 18);
+  const weekday = tripWindow('12-01', 0, 8);
+  assert.equal(rankTripWindows([weekend, weekday]).start, '11-28');
 });
