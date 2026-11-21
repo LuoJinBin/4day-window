@@ -3,7 +3,7 @@ function renderRank(view){
   if(!window.echarts){ el.innerHTML='<p class="cap">图表库未加载（可能离线），窗口排序见第 02 节日历与下方文字。</p>'; return; }
   const rc=document.getElementById('rankcap');
   if(rc){ const t0=view.windows[0];
-    rc.innerHTML='这半个月里所有连着四天的组合，按「晴或多云」这档从好到差排。横条长度是这段的整体分，条越短越差；「周 1／周 2」是跨了几个周末。'
+    rc.innerHTML='这半个月里所有连着四天的组合，先看天气是否合格，再看整体天气分；天气分接近时优先周末日更少的窗口，减少人流。「周 1／周 2」表示四天里包含的周六/周日天数，仅作人流参考，不是实时客流数据。'
       +(t0&&t0.valid? '最好的这段四天全过，可以直接走。' : '最好的这段也有 '+(t0?t0.bad:0)+' 天没过，所以这档是 0。')+' 阴天也算的那档，看上面那行。'; }
   const w=view.windows.slice().reverse();
   el.style.height=Math.max(330, Math.min(560, 40 + w.length*34))+'px';
@@ -108,10 +108,8 @@ function renderTripUI(view){
   const pick=document.getElementById('trippick'); const box=document.getElementById('trip');
   if(!pick||!box) return;
   const wins=view.windows.filter(function(w){ return w.days.length===4; });
-  let spans=wins.map(function(w){ return w.start; });
-  if(view.days.some(function(d){ return d.date==='11-28'; }) && spans.indexOf('11-28')<0) spans.unshift('11-28');
-  spans=spans.slice(0,10);
-  if(!TRIP_SEL || spans.indexOf(TRIP_SEL)<0) TRIP_SEL = spans.indexOf('11-28')>=0? '11-28' : spans[0];
+  let spans=wins.slice(0,10).map(function(w){ return w.start; });
+  if(!TRIP_SEL || spans.indexOf(TRIP_SEL)<0) TRIP_SEL = spans[0]||null;
   pick.innerHTML='<span>选一段评估：</span>'+spans.map(function(s){
     return '<button class="tpbtn'+(s===TRIP_SEL?' on':'')+'" data-s="'+s+'">'+s+' 起</button>';
   }).join('');
@@ -127,6 +125,7 @@ function renderTripUI(view){
   const v=tripVerdict(days);
   const short=minOrg<2;
   box.innerHTML='<div class="trip-h"><b>'+days[0].date+' — '+days[3].date+'</b>'
+    +'<span>人流偏好参考：含 '+win.wk+' 个周末日（周六/周日），越少越优先；不是实时客流数据</span>'
     +'<span>覆盖：最少 '+minOrg+' 家机构 / '+minN+' 个模式（按每天自身统计，不借别的日期）</span>'
     +'<span>可信度最低：'+CONF_TXT[minConf]+'</span>'
     +'<span>'+LEAD_TXT(days[0].lead)+' → '+LEAD_TXT(days[3].lead)+'</span></div>'
