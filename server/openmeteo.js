@@ -46,7 +46,7 @@ function applyDaylightWeatherCodes(daily, hourly) {
   const indicesByDate = new Map();
   hourly.time.forEach((stamp, index) => {
     if (typeof stamp !== 'string') return;
-    const match = /^(\\d{4}-\\d{2}-\\d{2})T(\\d{2}):/.exec(stamp);
+    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):/.exec(stamp);
     if (!match) return;
     const hour = Number(match[2]);
     if (hour < 7 || hour > 17) return;
