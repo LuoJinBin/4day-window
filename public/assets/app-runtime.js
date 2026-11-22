@@ -149,7 +149,7 @@ function setStatus(kind,text,engine){
 function render(view){
   VIEW=view;
   document.getElementById('h1').textContent='';
-  renderSimple(view); hero(view); renderFacts(view); renderCal(view); renderRank(view); renderTripUI(view); renderTrend(view); renderMatrix(view); renderAccV2(); wrapTables(); saveHist(view);
+  renderSimple(view); hero(view); renderFacts(view); renderCal(view); renderRank(view); renderTripUI(view); renderTrend(view); wrapTables();
 }
 
 const MDL = {'ecmwf_ifs025':'ECMWF','ecmwf_aifs025_single':'ECMWF-AI','ukmo_seamless':'UKMO','cma_grapes_global':'CMA','icon_seamless':'ICON','meteofrance_seamless':'Météo-FR'};
@@ -381,6 +381,6 @@ document.getElementById('btnEvidence').addEventListener('click',function(){
   this.scrollIntoView({behavior:'smooth',block:'start'});
 });
 
-renderMatrix(window.VIEW); renderProb();
+renderProb();
 window.addEventListener('load',function(){ if(window.echarts && window.VIEW){ try{ renderRank(VIEW); renderTrend(VIEW); renderProb(); }catch(e){} } });
 boot();
