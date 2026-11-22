@@ -79,8 +79,11 @@ function metrics(recs, wMap, lead){
       .reduce((s,o)=>s+o.w,0)/wTotal : 0;
   const heavy = heavyShare>=0.5;
   const overcastOrgs = orgs.filter(o=>o.cat==='阴').length;
-  if(modal==='雨' && !realRain) modal = overcastOrgs>0 ? '阴' : '多云';
-  const overcast = overcastOrgs>=2 || modal==='阴';
+  const overcastShare = wTotal>0? (catW['阴']||0)/wTotal : 0;
+  // 少数机构报阴保留为分歧信号，不再直接否决；阴天须达到独立机构加权多数。
+  if(modal==='雨' && !realRain) modal = overcastShare>=0.5 ? '阴' : '多云';
+  const overcast = modal==='阴';
+  const overcastMinority = !overcast && overcastShare>=0.3;
   const rainy = (rainShare>=0.5 && realRain) || heavy;
   const mist = orgs.some(o=>o.cat==='雨') && !realRain;
   const rainLevel = rainy? '明显' : (mist? '零星' : '无');
@@ -89,7 +92,7 @@ function metrics(recs, wMap, lead){
   const hiVals=use.map(r=>r.hi).filter(x=>x!=null);
   const hiSpread = hiVals.length>1? Math.max.apply(null,hiVals)-Math.min.apply(null,hiVals) : 0;
   const topShare = wTotal>0? Math.max.apply(null,Object.keys(catW).map(k=>catW[k]))/wTotal : 0;
-  const diverge = topShare<0.6 || hiSpread>4;
+  const diverge = topShare<0.6 || hiSpread>4 || overcastMinority;
   let conf = lead<=3?3 : lead<=7?2 : lead<=10?1 : 0;
   if(nOrg<=2) conf=Math.min(conf,1);
   if(nOrg<2) conf=0;
@@ -100,10 +103,12 @@ function metrics(recs, wMap, lead){
   const outReason = thin? (nModel===0? '数据不足':'仅一家') : rainy? '雨' : overcast? '阴' : (lead>7||conf<2)? '远期' : '';
   const agree = use.filter(r=>RUB.cat[r.cond]===modal).length;
   const why = LEAD_TXT(lead)+'；'+nOrg+' 家独立机构、'+nModel+' 个模式有数'
-    +(diverge? '；各家分歧较大（最高温差 '+hiSpread.toFixed(1)+'℃）' : '；各家分歧不大');
+    +(overcastMinority? '；'+overcastOrgs+' 家机构报阴，未达加权多数门槛'
+      : diverge? '；各家分歧较大（最高温差 '+hiSpread.toFixed(1)+'℃）' : '；各家分歧不大');
   return {hi:hi,lo:lo,wind:wind,condScore:cs,popMed:popMed,popMax:popMax,mmMed:mmMed,
           score:dayScore(cs,hi==null?22:hi,lo==null?15:lo,popMax==null?20:popMax),
-          modal:modal,n:nModel,nOrg:nOrg,agree:agree,overcast:overcast,rainy:rainy,mist:mist,
+          modal:modal,n:nModel,nOrg:nOrg,agree:agree,overcast:overcast,overcastOrgs:overcastOrgs,
+          overcastShare:overcastShare,overcastMinority:overcastMinority,rainy:rainy,mist:mist,
           rainLevel:rainLevel,ok:ok,loose:loose,trend:trend,outReason:outReason,
           conf:conf,confText:CONF_TXT[conf],confWhy:why,diverge:diverge,hiSpread:hiSpread,
           lead:lead,orgs:orgs,thin:thin};
@@ -235,7 +240,7 @@ function hero(view){
   if(valid.length){
     const top=valid[0];
     h1.innerHTML = '广州 <em>'+top.span.replace('—',' — ')+'</em> <span class="small">四天都能过</span>';
-    vsub.innerHTML = '四天都是晴或多云、不下雨，也没有两家同时报阴。'
+    vsub.innerHTML = '四天日间以机构加权多数判为晴或多云、不下雨。'
       + (valid.length===1? '这是当前唯一能走的一段。' : ('同时还有 '+(valid.length-1)+' 段可选。'))
       + (top.wk? '这段含 '+top.wk+' 个周末日；天气接近时已优先工作日，当前只作备选。' : '这段全在工作日，更符合避开周末人流的偏好。')
       + ' 可信度 <strong>'+CONF_TXT[top.conf]+'</strong>（'+LEAD_TXT(top.days[0].lead)+'）。';
@@ -348,9 +353,10 @@ function wxWord(d){
 function confTier(d){ return d.conf>=3? 3 : d.conf===2? 2 : 1; }
 function confWhy(d){
   const t=confTier(d);
-  if(t===3) return d.diverge? '日期近，各家略有分歧' : '日期近，预报稳定';
-  if(t===2) return d.diverge? '几天内，各家有分歧' : '几天内，基本稳定';
-  return (d.lead>9)? '日期太远，仅供参考' : '日期偏远，可能变化';
+  const base=t===3? (d.diverge? '日期近，各家略有分歧' : '日期近，预报稳定')
+    : t===2? (d.diverge? '几天内，各家有分歧' : '几天内，基本稳定')
+    : (d.lead>9? '日期太远，仅供参考' : '日期偏远，可能变化');
+  return d.overcastMinority? base+'；'+d.overcastOrgs+' 家机构报阴，未达加权多数' : base;
 }
 function winPen(w){
   let p=0;
@@ -551,7 +557,7 @@ function openPanel(d,btn){
   const p=document.getElementById('panel'); p.hidden=false;
   const why = d.thin? (d.n===0? '数据不足：这一天没有可用预报，不按晴或无雨处理' : '只有 '+d.nOrg+' 家机构有预报，不作确定结论')
     : d.ok? '能过'
-    : d.outReason==='阴'? (d.loose? '晴这档过不了（阴），阴天算那档可以' : '过不了：至少两家报阴')
+    : d.outReason==='阴'? (d.loose? '严格档未通过（加权多数报阴），宽松档可以' : '未通过：加权多数机构报阴')
     : d.outReason==='雨'? '过不了：多数机构报雨，或有明显降雨'
     : d.lead>7? '远期只作趋势参考，不出确定结论' : '置信度不够';
   const skyTxt = d.thin? '数据缺失，不能按晴或无雨处理'
