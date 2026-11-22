@@ -93,7 +93,7 @@ buildWindows()  14 天 → 11 个连续四天窗口
         ▼
 riskOf / winPen / verdictOf → 推荐出发 / 可以考虑 / 建议继续等待
         ▼
-renderSimple()  首屏；renderRank/renderTrend/renderProb/renderAccV2 折叠区
+renderSimple()  首屏；renderRank/renderTrend/renderProb 五个依据模块（模式矩阵与回测大表已从页面移除）
 ```
 
 - 预报接口（页面与服务端同一条，参数逐字一致）：
@@ -228,7 +228,7 @@ heavy    = 重雨权重过半
 
 1. **126 个 Single Runs 原始响应与抓取脚本未随仓库提供**（原工作区为临时目录，已清理）。回测结论以 `data/backtest.json` 固化；重跑需按第 4.7 节与 `data/README.md` 的接口参数重新抓取，缺失日期不得补造。
 2. **Brier 分数为空**，原因见上；不要用模拟概率填充。
-3. 页面的旧版研究报告（01–07 节）仍保留在 `#evidence` 折叠区，作为数据依据；首屏已不展示。
+3. `#evidence` 折叠区已改为「综合判断 + 5 个依据模块」，新增章节导航、卡片分组与手机端样式；删除「报得准不准」「各家模式各报了什么」两节（底层预报及历史统计接口不变）。
 4. 浏览器缓存键 `gz_wx_v9` 与服务端缓存互相独立；换域名/清缓存后首屏会先显示内置快照再自动更新，属预期。
 5. `src/core/logic.js` 与 `data/snapshot-*.json` 为生成物，不入库；修改前端模块后跑 `npm test` 会先自动重建，不要直接编辑生成物。
 6. 线上 Vercel 已启用同源服务端 `/api/forecast`，不是纯浏览器直连；GitHub 自动部署未接通，后续更新仍需手动部署。
