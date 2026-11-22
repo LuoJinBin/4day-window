@@ -479,7 +479,7 @@ function renderSimple(view){
 function renderFacts(view){
   const days=view.days, st=streaks(days);
   const fh=document.getElementById('fh');
-  if(fh) fh.innerHTML = (view.windows&&view.windows.some(w=>w.valid)? '为什么是这段' : '为什么是 0')+'<br>三个数字';
+  if(fh) fh.textContent = '关键指标';
   document.getElementById('f1').innerHTML = st.len>=4
     ? '预报里已经出现 <b>'+st.range+'</b>，连续 '+st.len+' 天都能过——四天连排成立。'
     : '预报里最长只连着 <b>'+st.len+' 天</b>能过'+(st.range?'（'+st.range+'）':'')+'，四天还差 '+(4-st.len)+' 天。';
