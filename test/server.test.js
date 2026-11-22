@@ -33,6 +33,27 @@ function syntheticDaily() {
   return daily;
 }
 
+function syntheticHourly() {
+  const time = [];
+  dates.forEach((date) => {
+    for (let hour = 7; hour <= 17; hour += 1) {
+      time.push(date + 'T' + String(hour).padStart(2, '0') + ':00');
+    }
+  });
+  const hourly = { time };
+  const models = ['ecmwf_ifs025', 'ecmwf_aifs025_single', 'ukmo_seamless', 'cma_grapes_global', 'icon_seamless', 'meteofrance_seamless'];
+  models.forEach((model) => {
+    hourly['weather_code_' + model] = time.map((stamp) => {
+      const dayIndex = dates.indexOf(stamp.slice(0, 10));
+      const hour = Number(stamp.slice(11, 13));
+      if (dayIndex === 0) return hour <= 11 ? 0 : 2; // Clear morning, partly cloudy afternoon.
+      if (dayIndex === 1) return 3; // Overcast for nearly all daylight hours.
+      return 2;
+    });
+  });
+  return hourly;
+}
+
 const cfg = {
   points: [
     { lat: 23.125, lon: 113.24 }, { lat: 23.129, lon: 113.267 },
@@ -50,6 +71,9 @@ test('预报 URL 与页面同参：四点多值、六模式、Asia/Shanghai', ()
   assert.match(url, /longitude=113\.24,113\.267,113\.33,113\.31/);
   assert.match(url, /timezone=Asia%2FShanghai/);
   assert.match(url, /forecast_days=16/);
+  assert.match(url, /hourly=weather_code/);
+  assert.match(url, /forecast_hours=168/);
+  assert.match(url, /past_hours=12/);
   assert.match(url, /models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless,cma_grapes_global,icon_seamless,meteofrance_seamless/);
 });
 
@@ -83,6 +107,20 @@ test('解析多模式响应：远期只剩 ECMWF，缺失模式不冒充覆盖',
   assert.ok(view.days[7].n <= 3);
   // 第 13 天：只剩 ECMWF 两个产品
   assert.equal(view.days[12].n, 2);
+});
+
+test('日间逐小时多数修正全天最严重天气码造成的阴天误判', async () => {
+  const raw = syntheticDaily();
+  const hourly = syntheticHourly();
+  const stub = async () => ({
+    ok: true,
+    json: async () => [0, 1, 2, 3].map(() => ({ daily: raw, hourly }))
+  });
+  const { view } = await fetchForecast(cfg, { fetchImpl: stub });
+  assert.equal(view.days[0].modal, '多云');
+  assert.equal(view.days[0].overcast, false);
+  assert.equal(view.days[1].modal, '阴');
+  assert.equal(view.days[8].modal, '雨');
 });
 
 test('Open-Meteo 拒绝日期错位或返回点位数量不足的数据', async () => {
