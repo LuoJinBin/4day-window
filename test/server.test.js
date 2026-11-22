@@ -123,6 +123,33 @@ test('日间逐小时多数修正全天最严重天气码造成的阴天误判',
   assert.equal(view.days[8].modal, '雨');
 });
 
+test('两家少数机构报阴只降低可信度，不推翻加权多数多云', async () => {
+  const raw = syntheticDaily();
+  const hourly = syntheticHourly();
+  const minorityOvercast = new Set(['icon_seamless', 'meteofrance_seamless']);
+  Object.keys(hourly).filter((key) => key.startsWith('weather_code_')).forEach((key) => {
+    const model = key.slice('weather_code_'.length);
+    hourly[key] = hourly[key].map((code, index) => {
+      const dayIndex = Math.floor(index / 11);
+      if (dayIndex !== 2) return code;
+      return minorityOvercast.has(model) ? 3 : 2;
+    });
+  });
+  const stub = async () => ({
+    ok: true,
+    json: async () => [0, 1, 2, 3].map(() => ({ daily: raw, hourly }))
+  });
+  const { view } = await fetchForecast(cfg, { fetchImpl: stub });
+  const day = view.days[2];
+  assert.equal(day.modal, '多云');
+  assert.equal(day.overcastOrgs, 2);
+  assert.ok(day.overcastShare > 0.3 && day.overcastShare < 0.5);
+  assert.equal(day.overcast, false);
+  assert.equal(day.overcastMinority, true);
+  assert.equal(day.diverge, true);
+  assert.equal(day.ok, true);
+});
+
 test('Open-Meteo 拒绝日期错位或返回点位数量不足的数据', async () => {
   const base=syntheticDaily();
   const shifted=syntheticDaily();
