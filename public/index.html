@@ -41,9 +41,25 @@
 </section>
 
 <div class="evidence" id="evidence" hidden>
+<div class="wrap">
+  <div class="evidence-intro">
+    <div class="evidence-intro-copy">
+      <span class="evidence-eyebrow">FORECAST / RESEARCH</span>
+      <h2>数据依据</h2>
+      <p>按「综合判断 → 逐日天气 → 四天比较 → 历史参考」查看，关键结论优先，细节按需展开。</p>
+    </div>
+    <nav class="evidence-nav" aria-label="数据依据章节导航">
+      <a href="#evidence-key">01 关键指标</a>
+      <a href="#evidence-daily">02 逐日预报</a>
+      <a href="#evidence-window">03 四天比较</a>
+      <a href="#evidence-trend">04 温雨趋势</a>
+      <a href="#evidence-history">05 历史参考</a>
+    </nav>
+  </div>
+</div>
 <section class="verdict">
   <div class="wrap">
-    <p class="kicker">现在怎么样</p>
+    <p class="kicker">综合判断 · WEATHER OUTLOOK</p>
     <h1 id="h1">近 14 天 <span class="n">0</span> <span class="small">段能走的四天</span></h1>
     <p class="vsub" id="vsub"></p>
     <p class="vnote" id="vnote"></p>
@@ -58,13 +74,13 @@
   </div>
 </section>
 
-<div class="wrap">
+<div class="wrap evidence-sections">
 
-  <section class="sheet">
+  <section class="sheet" id="evidence-key">
     <div class="rail">
       <div class="idx">01</div>
-      <h2 id="fh">为什么是 0<br>三个数字</h2>
-      <p>四天里只要有一天掉进雨里或阴天，整段就不算数——所以能连上的日子一直不多。</p>
+      <h2 id="fh">关键指标</h2>
+      <p>看连续合格天数、降水压力与阴天占比，解释窗口为何成立或落选。</p>
     </div>
     <div class="body">
       <div class="facts">
@@ -84,11 +100,11 @@
     </div>
   </section>
 
-  <section class="sheet">
+  <section class="sheet" id="evidence-daily">
     <div class="rail">
       <div class="idx">02</div>
-      <h2>每天什么样</h2>
-      <p>斜纹格子是没过的日子。点一天，能看到各家模式各自怎么报。</p>
+      <h2>逐日预报</h2>
+      <p>按日期看天气、温度和降雨风险。点选日期可查看详细依据。</p>
     </div>
     <div class="body">
       <div class="calwrap">
@@ -99,16 +115,16 @@
         </div>
       </div>
       <div class="panel" id="panel" hidden></div>
-      <p class="cap">每一格从上往下：日期、天气和温度、下雨概率，最后一条 0-100 的「适合出门」刻度，条越长越舒服。上面青色的带子是最接近的四天，琥珀色的次一档。「雨 43% · 1/2」这种写法，后面是几家报雨、几家有这份预报——11 月 25 号往后只有两家模式看得到，越远越只能当参考。</p>
+      <p class="cap">斜纹表示未通过严格筛选，青色与琥珀色标示候选窗口；末尾的 0–100 为适合出行评分。远期预报覆盖较少，只作趋势参考。</p>
       <p class="calhint">左右滑动查看全部 14 天</p>
     </div>
   </section>
 
-  <section class="sheet">
+  <section class="sheet" id="evidence-window">
     <div class="rail">
       <div class="idx">03</div>
-      <h2>四天怎么比</h2>
-      <p>先看四天里有几天没过，再看整体好不好；四天全过才算数。</p>
+      <h2>四天窗口比较</h2>
+      <p>比较连续四天的天气风险、舒适度与预报可信度。</p>
     </div>
     <div class="body">
       <div class="chart" id="rankchart"></div>
@@ -118,58 +134,33 @@
     </div>
   </section>
 
-  <section class="sheet">
+
+  <section class="sheet" id="evidence-trend">
     <div class="rail">
       <div class="idx">04</div>
-      <h2>各家模式各报了什么</h2>
-      <p>首屏每次重算，这张表跟着一起换，不会停在旧数据上。</p>
-    </div>
-    <div class="body">
-      <div class="mxwrap"><table class="mx" id="mx"></table></div>
-      <p class="cap">「一致」是几家报同一类天气。标红的是和当天多数派不一致的那一格。</p>
-    </div>
-  </section>
-
-  <section class="sheet">
-    <div class="rail">
-      <div class="idx">05</div>
-      <h2>温度与降水概率</h2>
-      <p>柱子越高，越可能下雨。灰色那段是当前最好的四天。</p>
+      <h2>温度与降雨趋势</h2>
+      <p>快速识别降雨风险集中的日期和气温变化。</p>
     </div>
     <div class="body">
       <div class="chart" id="trendchart"></div>
-      <p class="cap">柱子是各家报的降水概率，取其中最高的那个。两条实线是最高、最低温；细点线是其中一家单独的预报，用来看分歧。</p>
+      <p class="cap">柱形为各机构最高降水概率；实线是最高、最低温，细点线用于对照单模型分歧。阴影区标记候选四天。</p>
     </div>
   </section>
 
-  <section class="sheet">
+  <section class="sheet" id="evidence-history">
     <div class="rail">
-      <div class="idx">06</div>
-      <h2>什么时候才会有</h2>
-      <p>预报看不到那么远，就用过去 11 年的实际天气算概率。</p>
+      <div class="idx">05</div>
+      <h2>历史天气参考</h2>
+      <p>用长期记录了解季节规律，不把历史概率当成具体日期预报。</p>
     </div>
     <div class="body">
       <p class="vf" id="probtop"></p>
       <table class="prob" id="probtab"></table>
       <div class="chart" id="probchart" style="height:280px"></div>
-      <p class="cap">数据来源：Open-Meteo ERA5 再分析，广州 23.13°N 113.26°E，2015-01-01 到 2025-12-31 共 11 年、4018 天，缺失 0 天。公式：年份占比 = 命中年份数 ÷ 11。一个连续晴好段只在首次满四天时计一次，重叠的四天窗口不当独立事件。历史只能说明这个月机会大不大，具体哪天还得看预报。</p>
+      <p class="cap">来源：Open-Meteo ERA5，广州中心城区，2015–2025 年（11 年、4018 天）。年份占比按命中年份数 ÷ 11 计算，重叠窗口不重复计数；只反映历史规律，不预测具体出行日。</p>
     </div>
   </section>
 
-  <section class="sheet">
-    <div class="rail">
-      <div class="idx">07</div>
-      <h2>报得准不准</h2>
-      <p>按真实起报时间回算，分提前天数、分模型打分，组合和单模型都摆出来。</p>
-    </div>
-    <div class="body">
-      <p class="vf" id="acctop2"></p>
-      <table class="prob" id="acctab2"></table>
-      <table class="prob" id="accm2" style="margin-top:16px"></table>
-      <table class="prob" id="accmm2" style="margin-top:16px"></table>
-      <p class="acc-note" id="accnote2"></p>
-    </div>
-  </section>
 
 </div>
 
