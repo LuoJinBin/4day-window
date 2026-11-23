@@ -142,14 +142,15 @@ let VIEW=null;
 
 function setStatus(kind,text,engine){
   const dot=document.getElementById('dot');
-  dot.className='dot'+(kind==='warn'?' warn':kind==='err'?' err':'');
-  document.getElementById('status').textContent=text;
-  if(engine!==undefined) document.getElementById('engine').textContent=engine;
+  const status=document.getElementById('status');
+  const engineEl=document.getElementById('engine');
+  if(dot) dot.className='dot'+(kind==='warn'?' warn':kind==='err'?' err':'');
+  if(status) status.textContent=text;
+  if(engineEl && engine!==undefined) engineEl.textContent=engine;
 }
 function render(view){
   VIEW=view;
-  document.getElementById('h1').textContent='';
-  renderSimple(view); hero(view); renderFacts(view); renderCal(view); renderRank(view); renderTripUI(view); renderTrend(view); wrapTables();
+  renderSimple(view); renderCal(view); renderTrend(view); wrapTables();
 }
 
 const MDL = {'ecmwf_ifs025':'ECMWF','ecmwf_aifs025_single':'ECMWF-AI','ukmo_seamless':'UKMO','cma_grapes_global':'CMA','icon_seamless':'ICON','meteofrance_seamless':'Météo-FR'};
@@ -377,10 +378,9 @@ document.getElementById('btnEvidence').addEventListener('click',function(){
   const opening=ev.hasAttribute('hidden');
   if(opening){ ev.removeAttribute('hidden'); this.textContent='收起数据依据'; this.setAttribute('aria-expanded','true'); }
   else { ev.setAttribute('hidden',''); this.textContent='查看数据依据'; this.setAttribute('aria-expanded','false'); }
-  if(opening && VIEW){ try{ renderRank(VIEW); renderTrend(VIEW); renderProb(); renderTripUI(VIEW); wrapTables(); }catch(e){} }
+  if(opening && VIEW){ try{ renderTrend(VIEW); wrapTables(); }catch(e){} }
   this.scrollIntoView({behavior:'smooth',block:'start'});
 });
 
-renderProb();
-window.addEventListener('load',function(){ if(window.echarts && window.VIEW){ try{ renderRank(VIEW); renderTrend(VIEW); renderProb(); }catch(e){} } });
+window.addEventListener('load',function(){ if(window.echarts && window.VIEW){ try{ renderTrend(VIEW); }catch(e){} } });
 boot();
