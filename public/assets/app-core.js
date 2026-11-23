@@ -510,24 +510,10 @@ const W_SCORE={cma:.32,ecmwf:.20,qweather:.16,cmaweb:.16,moji:.12,eastday:.02,tw
 let CUR=null;
 function isToday(mmdd){ return mmdd===chinaIso().slice(5); }
 function renderCal(view){
-  const days=view.days, wins=view.windows;
+  const days=view.days;
   document.querySelector('.calinner').style.setProperty('--n', days.length);
   const hint=document.querySelector('.calhint');
   if(hint) hint.textContent='左右滑动查看全部 '+days.length+' 天';
-  const b1=document.getElementById('band1'), b2=document.getElementById('band2');
-  const top=wins[0], second=wins[1];
-  function band(el,w,cls,label){
-    el.innerHTML='';
-    const lb=document.createElement('div'); lb.className='lb'; lb.textContent=label; el.appendChild(lb);
-    if(!w) return;
-    const i0=days.findIndex(d=>d.date===w.start), i1=days.findIndex(d=>d.date===w.end);
-    for(let i=i0;i<=i1;i++){
-      const s=document.createElement('div'); s.className='bandseg '+cls;
-      s.style.gridColumn=(i+2)+''; el.appendChild(s);
-    }
-  }
-  band(b1,top,'p1', '最接近的一段');
-  band(b2,second,'p2','差一档');
   const cal=document.getElementById('cal');
   cal.innerHTML='';
   const hl=document.createElement('div'); hl.className='calhead'; hl.textContent='适合出门'; cal.appendChild(hl);
