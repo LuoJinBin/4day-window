@@ -512,8 +512,6 @@ function isToday(mmdd){ return mmdd===chinaIso().slice(5); }
 function renderCal(view){
   const days=view.days;
   document.querySelector('.calinner').style.setProperty('--n', days.length);
-  const hint=document.querySelector('.calhint');
-  if(hint) hint.textContent='左右滑动查看全部 '+days.length+' 天';
   const cal=document.getElementById('cal');
   cal.innerHTML='';
   const hl=document.createElement('div'); hl.className='calhead'; hl.textContent='适合出门'; cal.appendChild(hl);
