@@ -41,136 +41,37 @@
 </section>
 
 <div class="evidence" id="evidence" hidden>
-<div class="wrap">
-  <div class="evidence-intro">
-    <div class="evidence-intro-copy">
-      <span class="evidence-eyebrow">FORECAST / RESEARCH</span>
-      <h2>数据依据</h2>
-      <p>按「综合判断 → 逐日天气 → 四天比较 → 历史参考」查看，关键结论优先，细节按需展开。</p>
+  <div class="wrap evidence-actions">
+    <div class="evidence-status">
+      <span class="dot" id="dot"></span>
+      <span id="status">正在读取…</span>
     </div>
-    <nav class="evidence-nav" aria-label="数据依据章节导航">
-      <a href="#evidence-key">01 关键指标</a>
-      <a href="#evidence-daily">02 逐日预报</a>
-      <a href="#evidence-window">03 四天比较</a>
-      <a href="#evidence-trend">04 温雨趋势</a>
-      <a href="#evidence-history">05 历史参考</a>
-    </nav>
+    <button id="btnRecalc" type="button">立即重算</button>
   </div>
-</div>
-<section class="verdict">
-  <div class="wrap">
-    <p class="kicker">综合判断 · WEATHER OUTLOOK</p>
-    <h1 id="h1">近 14 天 <span class="n">0</span> <span class="small">段能走的四天</span></h1>
-    <p class="vsub" id="vsub"></p>
-    <p class="vnote" id="vnote"></p>
-    <div class="statusbox">
-      <span><span class="dot" id="dot"></span> <span id="status">正在读取…</span></span>
-      <button id="btnRecalc" type="button">立即重算</button>
-      <span id="engine" style="margin-left:auto"></span>
-    </div>
-    <div class="confbox" id="confbox"></div>
-    <div class="twores" id="twores"></div>
-    <div class="chips" id="chips"></div>
-  </div>
-</section>
-
-<div class="wrap evidence-sections">
-
-  <section class="sheet" id="evidence-key">
-    <div class="rail">
-      <div class="idx">01</div>
-      <h2 id="fh">关键指标</h2>
-      <p>看连续合格天数、降水压力与阴天占比，解释窗口为何成立或落选。</p>
-    </div>
-    <div class="body">
-      <div class="facts">
-        <div class="fact">
-          <div class="fn">最长连着几天</div>
-          <p id="f1">—</p>
-        </div>
-        <div class="fact">
-          <div class="fn">最湿的一天</div>
-          <p id="f2">—</p>
-        </div>
-        <div class="fact">
-          <div class="fn">阴占多少</div>
-          <p id="f3">—</p>
-        </div>
+  <div class="wrap evidence-sections">
+    <section class="sheet" id="evidence-daily">
+      <div class="rail">
+        <h2>逐日预报</h2>
       </div>
-    </div>
-  </section>
-
-  <section class="sheet" id="evidence-daily">
-    <div class="rail">
-      <div class="idx">02</div>
-      <h2>逐日预报</h2>
-      <p>按日期看天气、温度和降雨风险。点选日期可查看详细依据。</p>
-    </div>
-    <div class="body">
-      <div class="calwrap">
-        <div class="calinner">
-          <div class="band" id="band1"></div>
-          <div class="band" id="band2"></div>
-          <div class="cal" id="cal"></div>
+      <div class="body">
+        <div class="calwrap">
+          <div class="calinner">
+            <div class="cal" id="cal"></div>
+          </div>
         </div>
+        <div class="panel" id="panel" hidden></div>
+        <p class="calhint">左右滑动查看日期</p>
       </div>
-      <div class="panel" id="panel" hidden></div>
-      <p class="cap">斜纹表示未通过严格筛选，青色与琥珀色标示候选窗口；末尾的 0–100 为适合出行评分。远期预报覆盖较少，只作趋势参考。</p>
-      <p class="calhint">左右滑动查看全部 14 天</p>
-    </div>
-  </section>
-
-  <section class="sheet" id="evidence-window">
-    <div class="rail">
-      <div class="idx">03</div>
-      <h2>四天窗口比较</h2>
-      <p>比较连续四天的天气风险、舒适度与预报可信度。</p>
-    </div>
-    <div class="body">
-      <div class="chart" id="rankchart"></div>
-      <p class="cap" id="rankcap"></p>
-      <div class="trippick" id="trippick"></div>
-      <div class="trip" id="trip"></div>
-    </div>
-  </section>
-
-
-  <section class="sheet" id="evidence-trend">
-    <div class="rail">
-      <div class="idx">04</div>
-      <h2>温度与降雨趋势</h2>
-      <p>快速识别降雨风险集中的日期和气温变化。</p>
-    </div>
-    <div class="body">
-      <div class="chart" id="trendchart"></div>
-      <p class="cap">柱形为各机构最高降水概率；实线是最高、最低温，细点线用于对照单模型分歧。阴影区标记候选四天。</p>
-    </div>
-  </section>
-
-  <section class="sheet" id="evidence-history">
-    <div class="rail">
-      <div class="idx">05</div>
-      <h2>历史天气参考</h2>
-      <p>用长期记录了解季节规律，不把历史概率当成具体日期预报。</p>
-    </div>
-    <div class="body">
-      <p class="vf" id="probtop"></p>
-      <table class="prob" id="probtab"></table>
-      <div class="chart" id="probchart" style="height:280px"></div>
-      <p class="cap">来源：Open-Meteo ERA5，广州中心城区，2015–2025 年（11 年、4018 天）。年份占比按命中年份数 ÷ 11 计算，重叠窗口不重复计数；只反映历史规律，不预测具体出行日。</p>
-    </div>
-  </section>
-
-
-</div>
-
-<footer>
-  <div class="wrap">
-    <b>广州四天窗口监测</b>　只算广州中心城区：荔湾、越秀、天河、海珠四个位置合成一份，不分区。预报取六家数值模式：欧洲中心 ECMWF（含 AI 模式）、中国气象局 CMA、英国气象局 UKMO、德国 ICON、法国气象局 Météo-France，按各家在广州本地、同提前量的平衡准确率分权重；降水常年偏湿、容易虚报的美国 GFS 已剔除；历史概率是过去 11 年的实际天气。<br>
-    每次打开自动重算，6 小时内不重复请求；点「立即重算」立刻刷新。
+    </section>
+    <section class="sheet" id="evidence-trend">
+      <div class="rail">
+        <h2>温度与降雨趋势</h2>
+      </div>
+      <div class="body">
+        <div class="chart" id="trendchart"></div>
+      </div>
+    </section>
   </div>
-</footer>
-
 </div>
 
 <script src="./assets/snapshot-data.js"></script>
