@@ -11,6 +11,8 @@ const html = read('public/index.html');
 const JSPARTS = ['app-core.js', 'app-backtest.js', 'app-charts.js', 'app-runtime.js'];
 const js = JSPARTS.map((f) => read('public/assets/' + f)).join('\n');
 const css = read('public/assets/app.css');
+const runtime = read('public/assets/app-runtime.js');
+const core = read('public/assets/app-core.js');
 
 // 1) app.js 语法
 for (const f of JSPARTS) {
@@ -46,19 +48,26 @@ if (simple < 0) fail.push('缺少极简首屏渲染');
 
 if (!css.includes('@media')) fail.push('缺少响应式断点');
 
-// 数据依据保持五个清晰板块：两张冗余的大型数据表不进入页面。
-const evidenceHeadings = ['关键指标', '逐日预报', '四天窗口比较', '温度与降雨趋势', '历史天气参考'];
-const evidenceIds = ['evidence-key', 'evidence-daily', 'evidence-window', 'evidence-trend', 'evidence-history'];
-if ((html.match(/<section class="sheet"/g) || []).length !== 5) fail.push('证据区域必须有且仅有 5 个模块');
-for (const heading of evidenceHeadings) if (!html.includes(heading)) fail.push('缺少证据模块标题：' + heading);
-for (const id of evidenceIds) if (!html.includes('id="' + id + '"') || !html.includes('href="#' + id + '"')) fail.push('章节导航缺失：' + id);
-for (const removed of ['各家模式各报了什么', '报得准不准', 'id="mx"', 'id="acctop2"', 'id="acctab2"']) {
-  if (html.includes(removed)) fail.push('冗余区块仍存在：' + removed);
+// 数据依据只保留逐日预报与温度/降雨趋势。
+const evidenceHeadings = ['逐日预报', '温度与降雨趋势'];
+const evidenceIds = ['evidence-daily', 'evidence-trend'];
+if ((html.match(/<section class="sheet"/g) || []).length !== 2) fail.push('数据依据必须有且仅有 2 个模块');
+for (const heading of evidenceHeadings) if (!html.includes(heading)) fail.push('缺少数据模块标题：' + heading);
+for (const id of evidenceIds) if (!html.includes('id="' + id + '"')) fail.push('缺少数据模块：' + id);
+for (const removed of ['关键指标', '四天窗口比较', '历史天气参考', '各家模式各报了什么', '报得准不准', 'id="rankchart"', 'id="trip"', 'id="probtab"', 'id="probchart"', 'class="evidence-intro"', 'class="evidence-nav"', '<footer>', 'class="calhint"', 'class="cap"']) {
+  if (html.includes(removed)) fail.push('已删除内容仍存在：' + removed);
 }
-if (!css.includes('EVIDENCE REPORT REDESIGN') || !css.includes('.evidence .sheet{') || !css.includes('@media(max-width:640px)')) {
-  fail.push('缺少数据依据的分组卡片或手机端布局样式');
+if (!html.includes('id="btnRecalc"') || !html.includes('id="status"')) fail.push('缺少数据刷新状态或手动刷新入口');
+if (!css.includes('EVIDENCE DETAILS') || !css.includes('.evidence-actions') || !css.includes('@media(max-width:640px)')) {
+  fail.push('缺少简洁数据依据布局或手机端样式');
 }
-if (/renderMatrix\(view\); renderAccV2\(\)/.test(js)) fail.push('已移除板块仍被整体渲染');
+for (const removedCall of ['hero(view)', 'renderFacts(view)', 'renderRank(view)', 'renderTripUI(view)', 'renderProb()']) {
+  if (runtime.includes(removedCall)) fail.push('已删除的数据模块仍在运行时渲染：' + removedCall);
+}
+if (core.includes("getElementById('band1')") || core.includes("getElementById('band2')") || core.includes('calhint')) {
+  fail.push('日历仍引用已删除的提示或窗口标记');
+}
+if (!runtime.includes('renderTrend(view)') || !runtime.includes('renderCal(view)')) fail.push('逐日预报或趋势图未接入渲染流程');
 
 if (fail.length) {
   console.error('check:page FAILED');
