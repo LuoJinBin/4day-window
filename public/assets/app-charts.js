@@ -34,7 +34,7 @@ function renderRank(view){
 /* ---------- 趋势图 ---------- */
 function renderTrend(view){
   const el=document.getElementById('trendchart');
-  if(!window.echarts){ el.innerHTML='<p class="cap">图表库未加载，趋势数据见第 02 节日历。</p>'; return; }
+  if(!window.echarts){ el.textContent='趋势图暂不可用'; return; }
   const days=view.days;
   const ch=newChart(el);
   const ec = days.map(d=>{
