@@ -11,6 +11,7 @@ import { createForecastHandler, createHealthHandler } from '../server/vercel-han
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const DAYS = 16;
 const dates = Array.from({ length: DAYS }, (_, i) => {
@@ -371,4 +372,20 @@ test('Open-Meteo 429 exposes the upstream reason and is not retried immediately'
     }
   }), /Open-Meteo HTTP 429: API request limit exceeded \(Retry-After 60\)/);
   assert.equal(calls, 1);
+});
+
+test('local server defaults to loopback and hosted deployments can opt into all interfaces', () => {
+  const script = "import config from './server/config.js'; process.stdout.write(config.host);";
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'HOST'));
+  const local = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: process.cwd(), env, encoding: 'utf8'
+  });
+  assert.equal(local.status, 0, local.stderr);
+  assert.equal(local.stdout, '127.0.0.1');
+
+  const hosted = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: process.cwd(), env: { ...env, HOST: '0.0.0.0' }, encoding: 'utf8'
+  });
+  assert.equal(hosted.status, 0, hosted.stderr);
+  assert.equal(hosted.stdout, '0.0.0.0');
 });
