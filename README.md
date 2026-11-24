@@ -2,13 +2,13 @@
 
 判断广州中心城区**未来哪连续四天最适合出行**（4 天 3 晚）。首屏只回答四件事：什么时候出发、四天什么天气、现在能不能安排、要不要继续等；所有模型明细、回测与公式收在「查看数据依据」里，默认折叠。
 
-线上页面：<https://hcnlnejwgxc4.doubao.link/app/app_17j5a7evesj>（`app_id=app_17j5a7evesj`）
+线上页面：<https://guangzhou-4day-window.vercel.app/>
 
 ---
 
 ## 1. 这个仓库是什么
 
-原始交付物是一个**单文件 HTML**（CSS/JS 全内联、无后端）。本仓库在不改动任何判定口径的前提下做了三件事：
+原始交付物是一个**单文件 HTML**（CSS/JS 全内联、无后端）。本仓库在不改动天气评分、模型权重、降雨阈值与回测口径的前提下，做了三件事：
 
 1. 把页面拆成 `public/index.html` + `app.css` + 四个按顺序加载的 JS 模块（core / backtest 数据 / charts / runtime，原单文件 JS 只做切分、未改逻辑）+ 内置快照数据；
 2. 从同一份模块自动截取出 Node 可导入的纯逻辑模块 `src/core/logic.js`（**不是重写**，见 `scripts/sync-core.mjs`）；
@@ -26,7 +26,7 @@
 │       ├── app.css             # 全部样式（响应式）
 │       ├── app-core.js         # 常量、评分、四天窗口、风险与三档结论
 │       ├── app-backtest.js     # 回测数据常量 BT / BT_ORG / BT_LEADS（纯数据，无逻辑）
-│       ├── app-charts.js       # 图表、表格、日历、行程评估等渲染
+│       ├── app-charts.js       # 原生 SVG 趋势图、表格滚动、点击日期后才请求逐小时降雨详情
 │       ├── app-runtime.js      # 取数、缓存、实况回填、boot 与事件绑定
 │       └── snapshot-data.js    # 2026-11-14 内置离线快照
 ├── src/core/logic.js           # 自动生成（git 忽略）：页面逻辑的 Node 版本；npm install/test/start 会重建
@@ -68,12 +68,12 @@ npm start             # http://127.0.0.1:8787
 ```
 
 - 只想要页面：把 `public/` 整个目录丢到任意静态托管即可。此时 `window.GZ_API_BASE` 为空，页面直连 Open-Meteo，并用浏览器 `localStorage`（键 `gz_wx_v9`，TTL 6 小时）缓存。
-- 想让页面走服务端缓存：用 `npm start`。服务端会把 `index.html` 里的 `window.GZ_API_BASE = ''` 替换为 `/api/forecast`，页面优先请求同源接口，失败自动回退直连。
+- 想让页面走服务端缓存：用 `npm start`。服务端会把 `index.html` 里的 `window.GZ_API_BASE = ''` 替换为 `/api/forecast`，页面优先请求同源接口，失败自动回退直连。所有日历日期、更新时间和实况截止时刻均固定使用 `Asia/Shanghai`，不受访问者电脑时区影响。
 
 测试与检查：
 
 ```bash
-npm test              # 12 项：窗口/判定/风险分级/权重/气候/回测结构/接口
+npm test              # 覆盖窗口判定、时区/实况、点位一致性、缓存/调度、接口与静态资源
 npm run check:page    # 四个 JS 模块语法 + 首页关键结构
 ```
 
@@ -85,20 +85,20 @@ npm run check:page    # 四个 JS 模块语法 + 首页关键结构
 Open-Meteo（4 个城区点位 × 6 个数值模式，16 天）
         │  server/openmeteo.js（或浏览器 fetchLive）
         ▼
-aggPoints()  四点合成一份（天气现象取众数，温度/降水/风取中位）
+aggPoints()  四点合成一份（天气现象取众数；最低温取四点最低值；降水概率四点齐全时取中位数，否则取均值；其余数值字段取有效点均值）
         ▼
 fromOpenMeteo()  按模式汇总 → 每日 recs / 中位温度 / 中位降水 / pop / 模式覆盖数 n
         ▼
-buildWindows()  14 天 → 11 个连续四天窗口
+buildWindows()  16 天 → 13 个连续四天窗口
         ▼
 riskOf / winPen / verdictOf → 推荐出发 / 可以考虑 / 建议继续等待
         ▼
-renderSimple()  首屏；renderRank/renderTrend/renderProb/renderAccV2 折叠区
+renderSimple()  首屏严格档优先，其次阴天放宽，最后才显示远期趋势；数据依据折叠区仅展示逐日预报与温度/降雨趋势
 ```
 
 - 预报接口（页面与服务端同一条，参数逐字一致）：
   `https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=Asia%2FShanghai&forecast_days=16&models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless,cma_grapes_global,icon_seamless,meteofrance_seamless`
-- 实况回填：同接口加 `hourly=precipitation&past_days=7&forecast_days=1`，今天按 06:00 至当前逐小时累计 ≥1.0mm 判雨。
+- 实况回填：同接口加 `hourly=precipitation&past_days=7&forecast_days=1`，固定按广州时区 06:00 至当前已结束小时累计；当天累计达到 1.0mm 才确认已经下雨，未达到时保留当天剩余时段预报。
 - 历史再分析：`https://archive-api.open-meteo.com/v1/archive`（ERA5，UTC 日，广州 23.13N/113.26E，2015-01-01—2025-12-31）。
 - 回测：`https://single-runs-api.open-meteo.com/v1/forecast`，**必须** `timezone=UTC`、`run=<YYYY-MM-DD>T00:00`；`previous-runs-api` 只有最近 8 天带真实 pop。
 
@@ -140,6 +140,8 @@ heavy    = 重雨权重过半
 
 - 机构投票：`ORG` 把 `ecmwf_ifs025` 与 `ecmwf_aifs025_single` 合并为 ECMWF 一家（5 家机构 / 6 个模式）。
 - 分层：1–3 天 / 4–7 天 / 8–10 天 / 11–15 天。
+- 近 7 天的天气类别按广州时间 **07:00–17:00 逐小时 WMO 天气码**统计；日级 `weather_code` 代表当天最严重天气，不直接作为日间代表天气。小时数据不足时回退日级代码；7 天以后的远期仍以日级代码作趋势参考。
+- 阴天判定使用独立机构加权多数（阴天权重占比 ≥50%）；少数机构报阴保留为分歧提示并降低可信度，不再以“至少两家报阴”直接否决整天。
 - 页面只显示「高 / 中 / 低」+ 一句原因，不展示模型数量与名称。
 
 ### 4.5 模型权重（广州本地、同提前量平衡准确率重排，合计 1.0）
@@ -179,7 +181,7 @@ heavy    = 重雨权重过半
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT` | `8787` | 监听端口 |
-| `HOST` | `127.0.0.1` | 监听地址；容器部署可设 `0.0.0.0` |
+| `HOST` | `127.0.0.1` | 监听地址；容器/Render 等托管环境显式设置为 `0.0.0.0` |
 | `CACHE_TTL_MINUTES` | `360` | 缓存有效期（与页面 6 小时一致） |
 | `REFRESH_INTERVAL_MINUTES` | `360` | 定时刷新间隔，最小 5 分钟 |
 | `CACHE_FILE` | `data/cache/forecast.json` | 磁盘缓存路径 |
@@ -195,18 +197,20 @@ heavy    = 重雨权重过半
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/health` | 缓存时间、是否过期、最近错误 |
+| GET | `/api/health` | Vercel：函数存活状态与运行区；本地 Node：缓存时间、是否过期、最近错误 |
 | GET | `/api/forecast` | `{updatedAt, stale, ageMinutes, days, windows}` |
 | GET | `/api/forecast/raw` | 聚合后的 `daily` 原始数组 |
 | GET | `/api/config` | 点位、天数、缓存 TTL |
 | GET | `/api/data/{name}` | `climatology` / `backtest` / `weights` / `sources` / `condition-matrix` / `confidence-levels`；快照导出需先 `npm run data:export` |
 
-缓存策略：启动即刷一次；命中 6 小时内缓存不重复请求；刷新失败保留旧数据并标 `stale`；页面侧再兜底到内置快照。
+缓存策略：启动和定时任务均先检查 TTL；命中有效缓存不重复请求；刷新失败保留旧数据并标 `stale`；页面不会把旧数据续期，也不会将过期缓存记入准确率历史。
 
 ### 部署
 
-- 静态：上传 `public/`（Nginx / 对象存储 / 飞书应用托管均可）。
-- 服务：`npm start`，Nginx 反代到 `127.0.0.1:8787`；`data/` 需可写。单进程即可，定时器进程内运行，无需 cron。
+- **Vercel Production**：静态页面 + `api/forecast.js`、`api/health.js` 两个 Node Functions。`vercel.json` 为预报函数设置 `hkg1` 区域与 60 秒最长运行时间；函数使用 `/tmp/gz-weather-forecast.json` 和实例内存缓存。生产域名：`https://guangzhou-4day-window.vercel.app/`。
+- **自动部署状态**：GitHub 私有仓库尚未连接 Vercel Git 自动部署；当前线上版本由 `fix/full-hardening` 分支固定提交手动上传。后续源码更新后必须重新部署，不能只 push 就认为线上已更新。
+- **本地/容器服务**：`npm start`；默认仅监听 `127.0.0.1:8787`，不向局域网开放。容器或 Render 部署时，在平台环境变量中显式设置 `HOST=0.0.0.0`。生产服务需要可写的 `data/cache/`；单进程即可，定时器进程内运行，无需 cron。
+- **纯静态托管**：只上传 `public/` 时，页面会尝试 `/api/forecast`，若接口不存在则回退浏览器直连；在无法直连 Open-Meteo 的网络环境下，天气刷新会失败。
 - 继续用豆包 HTML 应用发布时：`lark-cli apps +deploy --file-path "<相对路径>" --app-id app_17j5a7evesj`，再用 `+release-get` 轮询到 `finished`。注意 `--file-path` 只收相对 cwd 的路径，且必须与 `cd` 同一条命令。
 
 ---
@@ -215,18 +219,20 @@ heavy    = 重雨权重过半
 
 已验证通过：
 
-- `npm test`：**12/12 通过**（窗口数量与跨度、阴天零扣分、持续降雨判等待、单日小雨可考虑、风险分级、置信分层、权重合计 1.0 与 ECMWF 合并计票、ERA5 11 年、回测分层与 Brier 为 null、URL 参数、缺失模式覆盖、HTTP 接口与静态资源）。
+- `npm test`：**35/35 通过**，覆盖窗口排序、工作日偏好、日间逐小时天气分类、少数机构阴天票不再直接否决、服务端预报缓存、Vercel API 方法限制/错误处理、Open-Meteo 429 限流诊断、历史统计、回测、HTTP 与页面结构。
 - `npm run check:page`：通过（四个 JS 模块 + 首页结构）。
-- 服务端实跑：`/api/health` 返回 `stale:false`，缓存 16 天数据；首页截图确认首屏为 `11-27 出发 · 11-30 返程`、四天逐日天气、`建议继续等待`、`暂定`、`更新于 11-20 21:57`。
+- Vercel Production 实跑：`/api/health` HTTP 200；`/api/forecast` HTTP 200，`stale:false`、16 天、13 个四天窗口、首日覆盖 5 家机构；线上首页 HTTP 200，已配置同源 `/api/forecast`。
+- 本轮 Preview 实跑（2026-11-22）：今天日间分类为「多云」，阴天机构权重占比 32%（2/5 家），不再触发阴天否决；保留分歧提示，可信度从高降为中，日间仍判为可行。
 
 尚未包含 / 需要接手注意：
 
 1. **126 个 Single Runs 原始响应与抓取脚本未随仓库提供**（原工作区为临时目录，已清理）。回测结论以 `data/backtest.json` 固化；重跑需按第 4.7 节与 `data/README.md` 的接口参数重新抓取，缺失日期不得补造。
 2. **Brier 分数为空**，原因见上；不要用模拟概率填充。
-3. 页面的旧版研究报告（01–07 节）仍保留在 `#evidence` 折叠区，作为数据依据；首屏已不展示。
+3. `#evidence` 折叠区只保留逐日预报与温度/降雨趋势；关键指标、四天窗口比较、历史天气参考、重复结论与说明文字已移除。
 4. 浏览器缓存键 `gz_wx_v9` 与服务端缓存互相独立；换域名/清缓存后首屏会先显示内置快照再自动更新，属预期。
 5. `src/core/logic.js` 与 `data/snapshot-*.json` 为生成物，不入库；修改前端模块后跑 `npm test` 会先自动重建，不要直接编辑生成物。
-6. 线上页面当前仍是“浏览器直连 + localStorage”版本；本仓库的服务端模式需部署后才会生效。
+6. 线上 Vercel 已启用同源服务端 `/api/forecast`，不是纯浏览器直连；GitHub 自动部署未接通，后续更新仍需手动部署。
+7. Open-Meteo HTTP 429 会返回上游限流原因与 `Retry-After`，不再立即重试造成请求风暴；免费接口按出口 IP 有日额度，若更改 Vercel 函数区域，必须重新验收天气接口。
 
 ---
 

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SNAP, buildWindows, verdictOf, winPen, riskOf, confTier,
+  SNAP, buildWindows, rankTripWindows, selectDisplayWindow, windowVerdict, verdictOf, winPen, riskOf, confTier, forecastMeta,
+  chinaParts, chinaIso, leadOf, applyObservedDay, completedHourlyRain, aggPoints,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
 
@@ -58,6 +59,94 @@ test('置信度分层只取高/中/低', () => {
   assert.equal(confTier(day({ conf: 1 })), 1);
 });
 
+test('服务端预报元数据保留真实更新时间与缓存年龄', () => {
+  const now = Date.parse('2026-11-20T12:00:00.000Z');
+  const updatedAt = Date.parse('2026-11-20T10:00:00.000Z');
+  const meta = forecastMeta({
+    updatedAt: '2026-11-20T10:00:00.000Z',
+    stale: false,
+    ageMinutes: 120
+  }, now);
+  assert.equal(meta.updatedAt, updatedAt);
+  assert.equal(meta.stale, false);
+  assert.equal(meta.ageMinutes, 120);
+});
+
+test('过期或缺少更新时间的服务端数据不能被当作新预报', () => {
+  const now = Date.parse('2026-11-20T12:00:00.000Z');
+  const stale = forecastMeta({
+    updatedAt: '2026-11-20T05:00:00.000Z',
+    stale: true,
+    ageMinutes: 420
+  }, now);
+  assert.equal(stale.stale, true);
+  assert.equal(stale.updatedAt, Date.parse('2026-11-20T05:00:00.000Z'));
+
+  const missing = forecastMeta({ stale: false }, now);
+  assert.equal(missing.stale, true);
+  assert.equal(missing.updatedAt, null);
+});
+
+test('广州日期与小时固定使用 Asia/Shanghai，不受访问者电脑时区影响', () => {
+  const instant = new Date('2026-11-20T16:30:00.000Z');
+  assert.equal(chinaIso(instant), '2026-11-21');
+  assert.equal(chinaParts(instant).hour, '00');
+  assert.equal(chinaParts(instant).minute, '30');
+  assert.equal(leadOf('11-21', instant), 0);
+  assert.equal(leadOf('11-22', instant), 1);
+});
+
+test('当天只累计已经结束的小时，并同步修正当天实况雨量', () => {
+  const daily={time:['2026-11-20','2026-11-21'],precipitation_sum:[99,0]};
+  const hourly={
+    time:['2026-11-20T05:00','2026-11-20T06:00','2026-11-20T07:00',
+      '2026-11-20T08:00','2026-11-20T12:00','2026-11-20T13:00'],
+    precipitation:[4,0.1,0.2,null,0.5,9]
+  };
+  const result=completedHourlyRain(daily,hourly,new Date('2026-11-20T05:30:00.000Z'));
+  assert.deepEqual(result,{mm:0.8,hours:3});
+  assert.equal(daily.__bornToday,0.8);
+  assert.equal(daily.precipitation_sum[0],0.8);
+  assert.equal(daily.precipitation_sum[1],0);
+});
+
+test('当天实况未达到判雨阈值时保留剩余时段预报', () => {
+  const forecast = day({rainy:true,modal:'雨',rainLevel:'明显',ok:false,loose:false,trend:false});
+  const partial = applyObservedDay(forecast,{mm:0.4,code:0},{isToday:true,hour:10});
+  assert.equal(partial.rainy,true);
+  assert.equal(partial.modal,'雨');
+  assert.equal(partial.ok,false);
+  assert.match(partial.actualNote,/剩余时段仍按预报/);
+  assert.equal(partial.actual,undefined);
+});
+
+test('当天已经观测到明显降雨时才把当天标记为已下雨', () => {
+  const forecast = day({rainy:false,modal:'多云',rainLevel:'无',ok:true,loose:true,trend:true});
+  const actual = applyObservedDay(forecast,{mm:1.2,code:61},{isToday:true,hour:11});
+  assert.equal(actual.rainy,true);
+  assert.equal(actual.modal,'雨');
+  assert.equal(actual.ok,false);
+  assert.equal(actual.actual,true);
+});
+
+test('四点合成规则与现有模型口径一致，并拒绝错位日期', () => {
+  const times=['2026-11-20'];
+  const points=[
+    {time:times,weather_code_x:[0],temperature_2m_max_x:[20],temperature_2m_min_x:[10],precipitation_sum_x:[0],precipitation_probability_max_x:[10],wind_speed_10m_max_x:[1]},
+    {time:times,weather_code_x:[2],temperature_2m_max_x:[22],temperature_2m_min_x:[12],precipitation_sum_x:[1],precipitation_probability_max_x:[20],wind_speed_10m_max_x:[2]},
+    {time:times,weather_code_x:[2],temperature_2m_max_x:[24],temperature_2m_min_x:[14],precipitation_sum_x:[3],precipitation_probability_max_x:[30],wind_speed_10m_max_x:[3]},
+    {time:times,weather_code_x:[61],temperature_2m_max_x:[26],temperature_2m_min_x:[16],precipitation_sum_x:[10],precipitation_probability_max_x:[90],wind_speed_10m_max_x:[10]}
+  ];
+  const merged=aggPoints(points);
+  assert.equal(merged.weather_code_x[0],2);
+  assert.equal(merged.temperature_2m_max_x[0],23);
+  assert.equal(merged.temperature_2m_min_x[0],10);
+  assert.equal(merged.precipitation_sum_x[0],3.5);
+  assert.equal(merged.precipitation_probability_max_x[0],25);
+  assert.equal(merged.wind_speed_10m_max_x[0],4);
+  assert.throws(()=>aggPoints([points[0],{...points[1],time:['2026-11-21']}]),/日期不一致/);
+});
+
 test('模型权重合计 1.0，ECMWF 两个产品按一家机构计票', () => {
   const sum = Object.values(W_MDL).reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(sum - 1) < 1e-9);
@@ -88,3 +177,118 @@ test('回测保留 1/3/5/7/10 天分层，且不伪造 Brier', () => {
     assert.equal(row.ens.brier, null);
   }
 });
+
+
+test('天气分数接近时，四天窗口优先减少周末日', () => {
+  const rows = [
+    ['11-23', '周一', 80], ['11-24', '周二', 80],
+    ['11-25', '周三', 80], ['11-26', '周四', 80],
+    ['11-27', '周五', 83], ['11-28', '周六', 83],
+    ['11-29', '周日', 83], ['11-30', '周一', 83]
+  ];
+  const windows = buildWindows(rows.map(([date, wd, score]) => day({ date, wd, score })));
+  const firstWeekend = windows.findIndex((w) => w.wk > 0);
+  assert.ok(firstWeekend > 0);
+  assert.ok(windows.slice(0, firstWeekend).every((w) => w.wk === 0));
+});
+
+test('天气优势明显时，不为避开周末而选择明显更差的窗口', () => {
+  const rows = [
+    ['11-23', '周一', 60], ['11-24', '周二', 60],
+    ['11-25', '周三', 60], ['11-26', '周四', 60],
+    ['11-27', '周五', 90], ['11-28', '周六', 90],
+    ['11-29', '周日', 90], ['11-30', '周一', 90]
+  ];
+  const windows = buildWindows(rows.map(([date, wd, score]) => day({ date, wd, score })));
+  assert.equal(windows[0].start, '11-27');
+  assert.equal(windows[0].wk, 2);
+});
+
+const tripWindow = (start, wk, firstLow) => ({
+  start,
+  wk,
+  days: ['11-28', '11-29', '11-30', '12-01'].map((date, i) => day({
+    date,
+    wd: ['周六', '周日', '周一', '周二'][i],
+    hi: 23,
+    lo: i === 0 ? firstLow : 18,
+    conf: 2
+  }))
+});
+
+test('首屏行程推荐在天气惩罚接近时优先周末日更少的窗口', () => {
+  const weekend = tripWindow('11-28', 2, 18);
+  const weekday = tripWindow('12-01', 0, 10);
+  assert.equal(rankTripWindows([weekend, weekday]).start, '12-01');
+});
+
+test('首屏行程推荐不会为了避开周末而选择明显更差的天气', () => {
+  const weekend = tripWindow('11-28', 2, 18);
+  const weekday = tripWindow('12-01', 0, 8);
+  assert.equal(rankTripWindows([weekend, weekday]).start, '11-28');
+});
+
+const classifiedWindow = (start, flags, overrides = {}) => ({
+  start,
+  end: start,
+  span: start + '—' + start,
+  wk: flags.wk ?? 0,
+  valid: flags.valid === true,
+  looseValid: flags.looseValid === true,
+  trendValid: flags.trendValid === true,
+  days: ['周一', '周二', '周三', '周四'].map((wd, i) => day(Object.assign({
+    date: '11-' + String(24 + i),
+    wd,
+    hi: 24,
+    lo: 18,
+    conf: 3,
+    lead: 3,
+    modal: '多云',
+    overcast: false
+  }, overrides)))
+});
+
+test('首页先选严格窗口，不让天气更舒服的远期趋势挤掉近期合格窗口', () => {
+  const strict = classifiedWindow('11-24', {
+    valid: true, looseValid: true, trendValid: true, wk: 2
+  }, { hi: 34, conf: 2, lead: 5 });
+  const trend = classifiedWindow('12-01', {
+    valid: false, looseValid: false, trendValid: true, wk: 0
+  }, { hi: 23, conf: 1, lead: 10 });
+  assert.equal(rankTripWindows([strict, trend]).start, '12-01');
+  const selected = selectDisplayWindow([trend, strict]);
+  assert.equal(selected.tier, 'strict');
+  assert.equal(selected.window.start, '11-24');
+  assert.ok(selected.candidates.every((w) => w.valid));
+});
+
+test('没有严格窗口时，阴天放宽窗口显示为“可以考虑”而非“推荐出发”', () => {
+  const loose = classifiedWindow('11-24', {
+    valid: false, looseValid: true, trendValid: false
+  }, { modal: '阴', overcast: true, conf: 2, lead: 5 });
+  assert.equal(verdictOf(loose).k, 'rec');
+  const selected = selectDisplayWindow([loose]);
+  assert.equal(selected.tier, 'loose');
+  assert.equal(windowVerdict(selected.window, selected.tier).k, 'maybe');
+  assert.match(windowVerdict(selected.window, selected.tier).why, /阴天/);
+});
+
+test('只有远期趋势窗口时必须提示等待，不能显示可出发结论', () => {
+  const trend = classifiedWindow('12-01', {
+    valid: false, looseValid: false, trendValid: true
+  }, { modal: '晴', overcast: false, conf: 1, lead: 10 });
+  assert.equal(verdictOf(trend).k, 'maybe');
+  const selected = selectDisplayWindow([trend]);
+  assert.equal(selected.tier, 'trend');
+  assert.equal(windowVerdict(selected.window, selected.tier).k, 'wait');
+});
+
+test('没有严格、放宽或趋势窗口时不制造可出发建议', () => {
+  const bad = classifiedWindow('11-24', {
+    valid: false, looseValid: false, trendValid: false
+  }, { rainy: true, rainLevel: '明显', mmMed: 8, popMax: 80, modal: '雨', overcast: false });
+  const selected = selectDisplayWindow([bad]);
+  assert.equal(selected.tier, 'none');
+  assert.equal(windowVerdict(selected.window, selected.tier).k, 'wait');
+});
+

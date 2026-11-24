@@ -1,12 +1,11 @@
-// 定时刷新：启动即刷一次，之后按 REFRESH_INTERVAL_MINUTES 轮询。
-// 只在数据过期时真正请求；进程退出时清理定时器。
+// 定时检查：启动时与每个周期都走 TTL-aware get；有效缓存不重复请求。
 export function startScheduler(service, cfg, { logger = console } = {}) {
   const intervalMs = Math.max(cfg.refreshMinutes, 5) * 60 * 1000;
 
-  service.refresh().catch(() => {});
+  service.get({}).catch((err) => logger.warn('[scheduler] ' + (err && err.message ? err.message : err)));
 
   const timer = setInterval(() => {
-    service.get({ force: true }).catch((err) => logger.warn('[scheduler] ' + (err && err.message ? err.message : err)));
+    service.get({}).catch((err) => logger.warn('[scheduler] ' + (err && err.message ? err.message : err)));
   }, intervalMs);
   timer.unref?.();
 

@@ -69,11 +69,6 @@ body{margin:0;background:var(--paper);color:var(--ink);
 /* 日历 */
 .calwrap{overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
 .calinner{min-width:0}
-.band{display:grid;grid-template-columns:72px repeat(var(--n,14),minmax(48px,1fr));gap:0 4px;align-items:center;margin-bottom:4px}
-.band .lb{grid-column:1;grid-row:1;font-size:10.5px;color:var(--ink3);padding-right:6px;text-align:right}
-.bandseg{height:6px;grid-row:1}
-.bandseg.p1{background:var(--sky)}
-.bandseg.p2{background:repeating-linear-gradient(90deg,var(--sun) 0 5px,transparent 5px 10px)}
 .cal{display:grid;grid-template-columns:72px repeat(var(--n,14),minmax(48px,1fr));gap:0 4px}
 .calhead{font-size:10.5px;color:var(--ink3);text-align:right;padding-right:6px;align-self:end}
 .cell{border:0;border-top:3px solid var(--c);background:var(--bg);padding:6px 5px 8px;
@@ -123,8 +118,23 @@ table.plats tr.is-out td{color:var(--ink3)}
 
 /* 图表 */
 .chart{width:100%;height:330px}
+#trendchart{display:flex;flex-direction:column;gap:7px;min-width:0}
+#trendchart .trend-legend{display:flex;flex-wrap:wrap;align-items:center;gap:7px 16px;color:var(--ink2);font-size:11px;line-height:1.35}
+#trendchart .trend-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+#trendchart .trend-key{display:inline-block;width:17px;height:0;border-top:2px solid currentColor}
+#trendchart .trend-key-max{color:#D9962B}
+#trendchart .trend-key-min{color:#16636F}
+#trendchart .trend-key-ecmwf{color:#8FA5A3;border-top-style:dotted}
+#trendchart .trend-key-rain{width:10px;height:10px;border:0;border-radius:2px;background:rgba(84,116,138,.3)}
+#trendchart .trend-svg{display:block;width:100%;height:auto;flex:1;min-height:0;overflow:visible}
+#trendchart .trend-grid{stroke:#E4EAE6;stroke-width:1}
+#trendchart .trend-axis{fill:var(--ink3);font-size:10px}
+#trendchart .trend-axis-rain{fill:#54748A}
+#trendchart .trend-rainbar{fill:rgba(84,116,138,.30)}
+#trendchart .trend-max{stroke:#D9962B}
+#trendchart .trend-min{stroke:#16636F}
+#trendchart .trend-ecmwf{stroke:#8FA5A3}
 .cap{font-size:11.5px;color:var(--ink3);margin:8px 0 0;line-height:1.6}
-.calhint{display:none;font-size:12px;color:var(--ink3);margin:6px 0 0}
 
 /* 矩阵 */
 .mxwrap{overflow-x:auto}
@@ -193,7 +203,6 @@ footer b{color:var(--ink2)}
   .fact:first-child{border-top:0}
   .method{grid-template-columns:1fr}
   .calinner{min-width:calc(72px + var(--n,14) * 56px)}
-  .calhint{display:block}
   .prow{grid-template-columns:80px minmax(0,1fr);gap:4px 14px}
   .prow .pw{grid-column:2}
   .prow .pc{grid-column:1/3}
@@ -283,3 +292,34 @@ footer b{color:var(--ink2)}
 }
 
 
+
+/* EVIDENCE DETAILS · CLEAN LAYOUT */
+.evidence{padding:8px 0 24px;background:linear-gradient(180deg,#edf2ee,#f3f6f3)}
+.evidence[hidden]{display:none!important}
+.evidence-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:16px;padding-bottom:6px}
+.evidence-status{display:flex;align-items:center;gap:9px;min-width:0;color:var(--ink2)}
+.evidence-status #status{font-size:12px;line-height:1.55}
+.evidence-actions button{font:inherit;font-size:12px;border:1px solid #cbd8d0;background:#fff;color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.evidence-actions button:hover{border-color:var(--sky);color:var(--sky)}
+.evidence-sections{display:grid;gap:14px;padding-top:8px;padding-bottom:20px}
+.evidence .sheet{display:block;min-width:0;margin:0;background:#fff;border:1px solid #dce5de;border-radius:13px;box-shadow:0 4px 18px rgba(33,61,49,.04);padding:22px 24px}
+.evidence .sheet>.rail{position:static;padding:0 0 12px;margin:0 0 15px;border:0;border-bottom:1px solid #e5ece7}
+.evidence .rail h2{font-size:18px;font-weight:700;line-height:1.4;margin:0}
+.evidence .sheet>.body{min-width:0}
+.evidence .calwrap{border-radius:8px}
+.evidence .panel{border:1px solid #dce6df;border-radius:9px;background:#f8faf9;margin-top:15px;padding:16px}
+.evidence .panel .p3d>div{border:1px solid #e2ebe4;border-radius:8px;background:#fff}
+.evidence .panel .tscroll{background:#fff}
+.evidence .tscroll{max-width:100%;border:1px solid #e2e9e4;border-radius:8px;overflow-x:auto}
+.evidence .chart{height:330px}
+@media(max-width:640px){
+  .evidence{padding:2px 0 16px}
+  .evidence-actions{padding-top:12px;gap:10px}
+  .evidence-status #status{font-size:11.5px}
+  .evidence-sections{gap:10px;padding-top:8px}
+  .evidence .sheet{border-radius:11px;padding:16px 13px}
+  .evidence .sheet>.rail{padding-bottom:10px;margin-bottom:12px}
+  .evidence .rail h2{font-size:16px}
+  .evidence .panel{padding:12px 9px}
+  .evidence .chart{height:270px}
+}

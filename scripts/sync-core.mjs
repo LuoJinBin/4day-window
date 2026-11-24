@@ -61,11 +61,12 @@ while (i < app.length) {
 const coreBody = app.slice(0, i);
 
 const EXPORTS = [
-  'median', 'dayScore', 'metrics', 'buildWindows', 'packDays',
+  'median', 'forecastMeta', 'chinaParts', 'chinaIso', 'chinaHour', 'leadOf', 'applyObservedDay', 'completedHourlyRain',
+  'dayScore', 'metrics', 'compareWindowPreference', 'buildWindows', 'rankTripWindows', 'selectDisplayWindow', 'windowVerdict', 'packDays',
   'riskOf', 'riskText', 'wxWord', 'confTier', 'confWhy',
-  'winPen', 'verdictOf', 'tripVerdict',
+  'winPen', 'verdictOf',
   'fromOpenMeteo', 'aggPoints', 'mergeDaily', 'snapshotView',
-  'RUB', 'NEED', 'WD', 'W_SCORE', 'ADV', 'OVER_ADV',
+  'RUB', 'NEED', 'WD', 'W_SCORE',
   'CLIMO', 'BT', 'CLIMO_META', 'BT_ORG', 'BT_LEADS',
   'SRC', 'SNAP', 'SNAP_TIME', 'SNAP_RAW', 'CACHE_KEY',
   'MDL', 'W_MDL', 'ORG', 'ORG_NAME', 'MODEL_TOTAL',
