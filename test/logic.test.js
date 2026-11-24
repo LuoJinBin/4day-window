@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SNAP, buildWindows, rankTripWindows, verdictOf, winPen, riskOf, confTier, forecastMeta,
+  SNAP, buildWindows, rankTripWindows, selectDisplayWindow, windowVerdict, verdictOf, winPen, riskOf, confTier, forecastMeta,
   chinaParts, chinaIso, leadOf, applyObservedDay, completedHourlyRain, aggPoints,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
@@ -227,3 +227,68 @@ test('首屏行程推荐不会为了避开周末而选择明显更差的天气',
   const weekday = tripWindow('12-01', 0, 8);
   assert.equal(rankTripWindows([weekend, weekday]).start, '11-28');
 });
+
+const classifiedWindow = (start, flags, overrides = {}) => ({
+  start,
+  end: start,
+  span: start + '—' + start,
+  wk: flags.wk ?? 0,
+  valid: flags.valid === true,
+  looseValid: flags.looseValid === true,
+  trendValid: flags.trendValid === true,
+  days: ['周一', '周二', '周三', '周四'].map((wd, i) => day(Object.assign({
+    date: '11-' + String(24 + i),
+    wd,
+    hi: 24,
+    lo: 18,
+    conf: 3,
+    lead: 3,
+    modal: '多云',
+    overcast: false
+  }, overrides)))
+});
+
+test('首页先选严格窗口，不让天气更舒服的远期趋势挤掉近期合格窗口', () => {
+  const strict = classifiedWindow('11-24', {
+    valid: true, looseValid: true, trendValid: true, wk: 2
+  }, { hi: 34, conf: 2, lead: 5 });
+  const trend = classifiedWindow('12-01', {
+    valid: false, looseValid: false, trendValid: true, wk: 0
+  }, { hi: 23, conf: 1, lead: 10 });
+  assert.equal(rankTripWindows([strict, trend]).start, '12-01');
+  const selected = selectDisplayWindow([trend, strict]);
+  assert.equal(selected.tier, 'strict');
+  assert.equal(selected.window.start, '11-24');
+  assert.ok(selected.candidates.every((w) => w.valid));
+});
+
+test('没有严格窗口时，阴天放宽窗口显示为“可以考虑”而非“推荐出发”', () => {
+  const loose = classifiedWindow('11-24', {
+    valid: false, looseValid: true, trendValid: false
+  }, { modal: '阴', overcast: true, conf: 2, lead: 5 });
+  assert.equal(verdictOf(loose).k, 'rec');
+  const selected = selectDisplayWindow([loose]);
+  assert.equal(selected.tier, 'loose');
+  assert.equal(windowVerdict(selected.window, selected.tier).k, 'maybe');
+  assert.match(windowVerdict(selected.window, selected.tier).why, /阴天/);
+});
+
+test('只有远期趋势窗口时必须提示等待，不能显示可出发结论', () => {
+  const trend = classifiedWindow('12-01', {
+    valid: false, looseValid: false, trendValid: true
+  }, { modal: '晴', overcast: false, conf: 1, lead: 10 });
+  assert.equal(verdictOf(trend).k, 'maybe');
+  const selected = selectDisplayWindow([trend]);
+  assert.equal(selected.tier, 'trend');
+  assert.equal(windowVerdict(selected.window, selected.tier).k, 'wait');
+});
+
+test('没有严格、放宽或趋势窗口时不制造可出发建议', () => {
+  const bad = classifiedWindow('11-24', {
+    valid: false, looseValid: false, trendValid: false
+  }, { rainy: true, rainLevel: '明显', mmMed: 8, popMax: 80, modal: '雨', overcast: false });
+  const selected = selectDisplayWindow([bad]);
+  assert.equal(selected.tier, 'none');
+  assert.equal(windowVerdict(selected.window, selected.tier).k, 'wait');
+});
+

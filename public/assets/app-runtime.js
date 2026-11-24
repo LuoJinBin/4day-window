@@ -334,7 +334,7 @@ async function boot(){
     setStatus('ok','缓存 '+hm(cache.ts)+' 的结果 · 有效至 '+hm(cache.ts+TTL),'数据：Open-Meteo 六模式');
     btn.disabled=false;
     refreshActual();
-    fetchRainHours(VIEW);
+
     return;
   }
   btn.disabled=true;
@@ -353,7 +353,7 @@ async function boot(){
       render(built || snapshotView());
       setStatus('err','这次没取到新数据（'+(err.message||'网络不通')+'），下面是 '+SNAP_TIME+' 抓的预报','内置');
     }
-  }finally{ btn.disabled=false; refreshActual(); fetchRainHours(VIEW); }
+  }finally{ btn.disabled=false; refreshActual(); }
 }
 function snapshotFromCache(view, meta={}){
   const days=view.days.map(d=>Object.assign({},d,{recs:d.recs||[],
@@ -370,7 +370,7 @@ document.getElementById('btnRecalc').addEventListener('click',async function(){
     applyForecastResult(v);
   }catch(err){
     setStatus('err','重算失败（'+(err.message||'网络不通')+'），继续显示屏幕上这一次的结果','离线');
-  }finally{ this.disabled=false; refreshActual(); fetchRainHours(VIEW); }
+  }finally{ this.disabled=false; refreshActual(); }
 });
 
 document.getElementById('btnEvidence').addEventListener('click',function(){

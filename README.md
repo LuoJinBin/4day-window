@@ -2,13 +2,13 @@
 
 判断广州中心城区**未来哪连续四天最适合出行**（4 天 3 晚）。首屏只回答四件事：什么时候出发、四天什么天气、现在能不能安排、要不要继续等；所有模型明细、回测与公式收在「查看数据依据」里，默认折叠。
 
-线上页面：<https://hcnlnejwgxc4.doubao.link/app/app_17j5a7evesj>（`app_id=app_17j5a7evesj`）
+线上页面：<https://guangzhou-4day-window.vercel.app/>
 
 ---
 
 ## 1. 这个仓库是什么
 
-原始交付物是一个**单文件 HTML**（CSS/JS 全内联、无后端）。本仓库在不改动任何判定口径的前提下做了三件事：
+原始交付物是一个**单文件 HTML**（CSS/JS 全内联、无后端）。本仓库在不改动天气评分、模型权重、降雨阈值与回测口径的前提下，做了三件事：
 
 1. 把页面拆成 `public/index.html` + `app.css` + 四个按顺序加载的 JS 模块（core / backtest 数据 / charts / runtime，原单文件 JS 只做切分、未改逻辑）+ 内置快照数据；
 2. 从同一份模块自动截取出 Node 可导入的纯逻辑模块 `src/core/logic.js`（**不是重写**，见 `scripts/sync-core.mjs`）；
@@ -26,7 +26,7 @@
 │       ├── app.css             # 全部样式（响应式）
 │       ├── app-core.js         # 常量、评分、四天窗口、风险与三档结论
 │       ├── app-backtest.js     # 回测数据常量 BT / BT_ORG / BT_LEADS（纯数据，无逻辑）
-│       ├── app-charts.js       # 图表、表格、日历、行程评估等渲染
+│       ├── app-charts.js       # 原生 SVG 趋势图、表格滚动、点击日期后才请求逐小时降雨详情
 │       ├── app-runtime.js      # 取数、缓存、实况回填、boot 与事件绑定
 │       └── snapshot-data.js    # 2026-11-14 内置离线快照
 ├── src/core/logic.js           # 自动生成（git 忽略）：页面逻辑的 Node 版本；npm install/test/start 会重建
@@ -89,11 +89,11 @@ aggPoints()  四点合成一份（天气现象取众数；最低温取四点最�
         ▼
 fromOpenMeteo()  按模式汇总 → 每日 recs / 中位温度 / 中位降水 / pop / 模式覆盖数 n
         ▼
-buildWindows()  14 天 → 11 个连续四天窗口
+buildWindows()  16 天 → 13 个连续四天窗口
         ▼
 riskOf / winPen / verdictOf → 推荐出发 / 可以考虑 / 建议继续等待
         ▼
-renderSimple()  首屏；数据依据折叠区仅展示逐日预报与温度/降雨趋势
+renderSimple()  首屏严格档优先，其次阴天放宽，最后才显示远期趋势；数据依据折叠区仅展示逐日预报与温度/降雨趋势
 ```
 
 - 预报接口（页面与服务端同一条，参数逐字一致）：

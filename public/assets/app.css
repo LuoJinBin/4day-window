@@ -118,6 +118,22 @@ table.plats tr.is-out td{color:var(--ink3)}
 
 /* 图表 */
 .chart{width:100%;height:330px}
+#trendchart{display:flex;flex-direction:column;gap:7px;min-width:0}
+#trendchart .trend-legend{display:flex;flex-wrap:wrap;align-items:center;gap:7px 16px;color:var(--ink2);font-size:11px;line-height:1.35}
+#trendchart .trend-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+#trendchart .trend-key{display:inline-block;width:17px;height:0;border-top:2px solid currentColor}
+#trendchart .trend-key-max{color:#D9962B}
+#trendchart .trend-key-min{color:#16636F}
+#trendchart .trend-key-ecmwf{color:#8FA5A3;border-top-style:dotted}
+#trendchart .trend-key-rain{width:10px;height:10px;border:0;border-radius:2px;background:rgba(84,116,138,.3)}
+#trendchart .trend-svg{display:block;width:100%;height:auto;flex:1;min-height:0;overflow:visible}
+#trendchart .trend-grid{stroke:#E4EAE6;stroke-width:1}
+#trendchart .trend-axis{fill:var(--ink3);font-size:10px}
+#trendchart .trend-axis-rain{fill:#54748A}
+#trendchart .trend-rainbar{fill:rgba(84,116,138,.30)}
+#trendchart .trend-max{stroke:#D9962B}
+#trendchart .trend-min{stroke:#16636F}
+#trendchart .trend-ecmwf{stroke:#8FA5A3}
 .cap{font-size:11.5px;color:var(--ink3);margin:8px 0 0;line-height:1.6}
 
 /* 矩阵 */

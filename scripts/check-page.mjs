@@ -11,6 +11,7 @@ const html = read('public/index.html');
 const JSPARTS = ['app-core.js', 'app-backtest.js', 'app-charts.js', 'app-runtime.js'];
 const js = JSPARTS.map((f) => read('public/assets/' + f)).join('\n');
 const css = read('public/assets/app.css');
+const charts = read('public/assets/app-charts.js');
 const runtime = read('public/assets/app-runtime.js');
 const core = read('public/assets/app-core.js');
 
@@ -37,7 +38,7 @@ if (!/id="evidence"[^>]*hidden/.test(html)) fail.push('#evidence 必须默认折
 if (/<script>\s*const DATA/.test(html)) fail.push('内置数据必须外置为 snapshot-data.js');
 
 // 3) 关键逻辑仍在
-for (const fn of ['renderSimple', 'winPen', 'verdictOf', 'buildWindows', 'fromOpenMeteo', 'tripVerdict']) {
+for (const fn of ['renderSimple', 'winPen', 'verdictOf', 'buildWindows', 'fromOpenMeteo', 'selectDisplayWindow', 'windowVerdict']) {
   if (!js.includes('function ' + fn)) fail.push('缺少核心函数 ' + fn);
 }
 if (!js.includes("const CACHE_KEY='gz_wx_v9'") && !js.includes('CACHE_KEY')) fail.push('缺少浏览器缓存键');
@@ -68,6 +69,14 @@ if (core.includes("getElementById('band1')") || core.includes("getElementById('b
   fail.push('日历仍引用已删除的提示或窗口标记');
 }
 if (!runtime.includes('renderTrend(view)') || !runtime.includes('renderCal(view)')) fail.push('逐日预报或趋势图未接入渲染流程');
+if (/<script[^>]+src=["']https?:\/\//i.test(html) || /echarts/i.test(html + charts)) fail.push('页面不应依赖外部图表脚本');
+if (!charts.includes('function renderTrend') || !charts.includes('<svg class="trend-svg"')) fail.push('趋势图必须使用原生 SVG');
+if (/function (renderRank|renderTripUI|renderProb|renderAccV2|renderMatrix|renderAlts|renderPlan|renderSrc)\(/.test(charts)) fail.push('已移除的旧图表/历史模块仍残留');
+if (!charts.includes('function fetchRainHours') || !core.includes('fetchRainHours(view)')) fail.push('逐小时降雨详情没有按需加载入口');
+if (/fetchRainHours\(VIEW\)/.test(runtime)) fail.push('逐小时降雨不应在首屏加载时自动请求');
+if (runtime.includes('renderAcc') || runtime.includes('saveHist')) fail.push('已移除的历史准确率模块仍在运行时加载');
+if (!html.includes('aria-controls="evidence"') || !html.includes('role="status"')) fail.push('折叠区或数据状态缺少辅助技术标记');
+if (!css.includes('#trendchart .trend-legend') || !css.includes('#trendchart .trend-svg')) fail.push('缺少原生趋势图响应式样式');
 
 if (fail.length) {
   console.error('check:page FAILED');

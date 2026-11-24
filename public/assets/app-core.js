@@ -223,98 +223,8 @@ function packDays(raw){
 }
 
 /* ---------- 结论文案 ---------- */
-function streaks(days){
-  let run=0, best=0, bestStart=null, bestEnd=null, cur=null;
-  days.forEach(d=>{
-    if(d.ok){ if(!run) cur=d.date; run++; if(run>best){best=run; bestStart=cur; bestEnd=d.date;} }
-    else { run=0; cur=null; }
-  });
-  return {len:best, start:bestStart, end:bestEnd, range: bestStart? (best===1?bestStart:bestStart+'—'+bestEnd) : null};
-}
-function hero(view){
-  const wins=view.windows, valid=wins.filter(w=>w.valid);
-  const h1=document.getElementById('h1'), vsub=document.getElementById('vsub'), vnote=document.getElementById('vnote');
-  const near=view.days.filter(d=>d.lead>=0).slice(0,4);
-  const st=streaks(view.days);
-  const trendW=wins.filter(w=>!w.valid && w.trendValid).sort((a,b)=>compareWindowPreference(a,b,'trendBad',5));
-  if(valid.length){
-    const top=valid[0];
-    h1.innerHTML = '广州 <em>'+top.span.replace('—',' — ')+'</em> <span class="small">四天都能过</span>';
-    vsub.innerHTML = '四天日间以机构加权多数判为晴或多云、不下雨。'
-      + (valid.length===1? '这是当前唯一能走的一段。' : ('同时还有 '+(valid.length-1)+' 段可选。'))
-      + (top.wk? '这段含 '+top.wk+' 个周末日；天气接近时已优先工作日，当前只作备选。' : '这段全在工作日，更符合避开周末人流的偏好。')
-      + ' 可信度 <strong>'+CONF_TXT[top.conf]+'</strong>（'+LEAD_TXT(top.days[0].lead)+'）。';
-    vnote.textContent = '数据每次打开自动重算（6 小时节流），窗口如变化会立刻反映在这里。';
-  }else if(trendW.length){
-    const top=trendW[0];
-    h1.innerHTML = '广州近 7 天 <span class="n">0</span> <span class="small">段能走的四天</span>';
-    vsub.innerHTML = '未来 7 天里凑不出连着四天都晴或多云、不下雨。往后 <strong>'+top.span+'</strong> 这段各家都不报雨、也不报阴，'
-      +'但属于'+LEAD_TXT(top.days[0].lead)+'，'+(top.wk?'含 '+top.wk+' 个周末日；':'全在工作日；')+'只能当趋势参考，别按它定行程。';
-    vnote.textContent = '远期预报会反复改，等它进入未来 7 天，这里才会升级成能走的窗口。';
-  }else{
-    h1.innerHTML = '广州接下来 '+view.days.length+' 天 <span class="n">0</span> <span class="small">段能走的四天</span>';
-    const okDates = view.days.filter(d=>d.ok).map(d=>d.date);
-    vsub.innerHTML = '四天都要是晴或多云、不下雨，才算能走。这 '+view.days.length+' 天里'
-      + (okDates.length? '能过的日子只有 <strong>'+okDates.join('、')+'</strong>，连不成四天。' : '每天都有雨或阴，没有一天能过。')
-      + (view.days.length<16 ? ' <span class="muted">（模式末尾 '+(16-view.days.length)+' 天数据不全，未计入）</span>' : '');
-    vnote.innerHTML = '按过去 11 年实际天气，这个月出现过四天连晴的年份占比见第 06 节。页面每次打开都会重算，一旦出现能走的四天，这里立刻换成它。';
-  }
-  // 首屏可信度：不是命中率，也不是天气好坏分
-  const cb=document.getElementById('confbox');
-  if(cb && near.length){
-    const minConf=Math.min.apply(null,near.map(d=>d.conf));
-    const orgN=Math.max.apply(null,near.map(d=>d.nOrg));
-    const modelN=Math.max.apply(null,near.map(d=>d.n));
-    const dv=near.filter(d=>d.diverge).length;
-    cb.innerHTML='<b>当前预报可信度：'+CONF_TXT[minConf]+'</b>'
-      +'<span>未来 4 天 · 真正参与判断的是 '+orgN+' 家独立机构 / '+modelN+' 个模式</span>'
-      +'<span class="cb-d">依据：'+LEAD_TXT(near[0].lead)+'起、机构覆盖 '+orgN+'/'+ORG_TOTAL+' 家'
-      +(dv? '、'+dv+' 天各家分歧偏大':'、各家分歧不大')+'</span>'
-      +'<span class="cb-d">这是预报可靠程度，不是命中率，也不是天气好坏分。</span>';
-  }
-  const tr=document.getElementById('twores');
-  if(tr){
-    const strict = valid.length? '<b>'+valid[0].span+'</b>（可信度 '+CONF_TXT[valid[0].conf]+'；'+(valid[0].wk?'含 '+valid[0].wk+' 个周末日':'全工作日')+'）' : '近 7 天没有';
-    const lw=wins.filter(w=>w.looseValid).sort((a,b)=>compareWindowPreference(a,b,'looseBad',5))[0];
-    const loose = lw? '<b>'+lw.span+'</b>'+(lw.wk? '（含 '+lw.wk+' 个周末日）':'（全工作日）') : '近 7 天也没有';
-    tr.innerHTML='<span>严格晴好：'+strict+'</span><span>阴天也算：'+loose+'</span>';
-  }
-  const chips=document.getElementById('chips');
-  const strictW=valid[0];
-  const pickLoose=wins.filter(w=>w.looseValid).sort((a,b)=>compareWindowPreference(a,b,'looseBad',5))[0];
-  const pick=strictW||pickLoose||trendW[0];
-  let shown=[], note='';
-  if(pick){
-    shown=pick.days;
-    note = pick.valid
-      ? '这四天都是晴或多云、没有雨'+(pick.wk? '，不过跨了 '+pick.wk+' 天周末，按你的口径只作备用' : '，可以按这段安排')+'。'
-      : (pick.trendValid && !pick.looseValid
-          ? '这段只是趋势参考：各家暂时不报雨，但还远，别当确定安排。'
-          : '严格那档过不了，但阴天算的话这四天都不下雨（'+(pick.wk?('跨 '+pick.wk+' 天周末，只当备用'):'四天都在工作日')+'）。');
-  }else{
-    shown = view.days.filter(d=>d.lead>=0).slice(0,4);
-    note = '没有可推荐的窗口，先给你看接下来 '+shown.length+' 天：'
-      + shown.map(d=>d.date+' '+(d.thin?(d.n===0?'缺数据':'仅 1 家机构'):(d.outReason||'能过'))).join('，')
-      + '。每天下面那条是降雨风险，点 02 里的格子能看各家细节。';
-  }
-  const maxCols = window.innerWidth<=640? 2 : 4;
-  chips.style.setProperty('--cols', String(Math.max(1, Math.min(maxCols, shown.length))));
-  chips.classList.toggle('narrow', shown.length<=2);
-  chips.innerHTML = shown.map(d=>{
-    const bar = 'var(--good)';
-    return '<div class="chip" style="--bar:'+bar+'">'
-
-      +'<div class="cd"><span class="num">'+d.date+'</span><span class="cw">'+d.wd+'</span></div>'
-      +'<div class="cl">'+svgIcon(d.rainy?'rain':(d.modal==='晴'?'sun':d.modal==='阴'?'over':'cloud'))+'<span class="ct"><b>'+(d.hi==null?'—':Math.round(d.hi)+'°')+'</b>'+d.modal+(d.ok?'':(d.lead>7?' · 趋势':' · 次档'))+'<small style="color:var(--ink3)"> '+d.confText+'</small></span></div>'
-      +'<div class="cs"><i style="width:'+d.score+'%"></i></div>'
-      +'<div class="cp" style="font-size:11px;color:var(--ink3)">雨 '+(d.popMed==null?'缺':Math.round(d.popMed)+'%')+' · '+d.nOrg+' 家</div></div>';
-  }).join('') + '<div class="chipnote">'+note+'</div>';
-}
-
-
 /* ---------- 极简首屏：只回答去哪儿、什么时候、什么天气 ---------- */
 let LAST_TS=null;
-function pad2n(n){ return ('0'+n).slice(-2); }
 function fmtStamp(v){
   if(v==null) return '—';
   if(typeof v==='string'){
@@ -413,16 +323,48 @@ function verdictOf(w){
     : (minConf===0? '这几天的预报还不够稳' : '这几天雨水偏多');
   return {k:'wait',t:'建议继续等待',why:why+'，现在订行程容易踩空。日期近了会重新算。'};
 }
+function selectDisplayWindow(wins){
+  const tiers=[
+    ['strict',wins.filter(w=>w.valid)],
+    ['loose',wins.filter(w=>w.looseValid)],
+    ['trend',wins.filter(w=>w.trendValid)]
+  ];
+  for(const entry of tiers){
+    if(entry[1].length){
+      return {tier:entry[0],window:rankTripWindows(entry[1]),candidates:entry[1]};
+    }
+  }
+  const best=rankTripWindows(wins);
+  return best? {tier:'none',window:best,candidates:[]} : null;
+}
+function windowVerdict(w,tier){
+  const base=verdictOf(w);
+  if(tier==='strict') return base;
+  if(tier==='loose'){
+    if(base.k==='wait') return base;
+    const cloudy=w.days.filter(d=>d.modal==='阴'||d.overcast).map(d=>d.date);
+    const prefix=cloudy.length
+      ? '这段有阴天（'+cloudy.join('、')+'），但没有明显降雨；按阴天放宽口径可以考虑。'
+      : '这段符合阴天放宽口径，可以考虑。';
+    const extra=base.k==='rec'? '温度和降雨风险也在可接受范围。' : base.why;
+    return {k:'maybe',t:'可以考虑',why:prefix+(extra?' '+extra:'')};
+  }
+  if(tier==='trend'){
+    return {k:'wait',t:'建议继续等待',why:'目前没有满足严格晴好或阴天放宽条件的四天窗口；'+(w.span||'这段日期')+'只作远期趋势参考，预报还会变化，不建议据此订行程。'};
+  }
+  return {k:'wait',t:'建议继续等待',why:'当前预报没有满足严格晴好或阴天放宽条件的连续四天窗口，继续等待下一轮预报。'};
+}
+
 function renderSimple(view){
   const rEl=document.getElementById('sRange'); if(!rEl) return;
   const wins=(view.windows||[]).filter(function(w){ return w.days && w.days.length===4; });
   if(!wins.length){ rEl.innerHTML='暂无可用的四天窗口'; return; }
-  let minPen=1e9;
-  wins.forEach(function(w){ const p=winPen(w); if(p<minPen) minPen=p; });
-  // 天气先筛；可信度优先。天气惩罚相差不超过 6 分时，优先周末日更少的窗口。
-  const best=rankTripWindows(wins);
-  if(!best){ rEl.innerHTML='暂无可用的四天窗口'; return; }
-  const days=best.days, v=verdictOf(best);
+  // 先按既有判定档位筛选，再在同一档内沿用原有风险/可信度/周末排序。
+  const selected=selectDisplayWindow(wins);
+  if(!selected || !selected.window){ rEl.innerHTML='暂无可用的四天窗口'; return; }
+  const best=selected.window, candidatePool=selected.candidates;
+  const minPen=candidatePool.length? Math.min.apply(null,candidatePool.map(function(w){return winPen(w);})) : Infinity;
+  const days=best.days, v=windowVerdict(best,selected.tier);
   const mc=Math.min.apply(null,days.map(function(d){ return d.conf; }));
   const tent=mc<=1? ' · 暂定' : '';
   const crowdNote=best.wk===0? '全工作日，符合避开周末的偏好' : '含 '+best.wk+' 个周末日；天气接近时已优先工作日';
@@ -451,7 +393,7 @@ function renderSimple(view){
   const bi=idxOf(best);
   let alt=null;
   if(v.k!=='wait'){
-    const candidates=wins.filter(function(w){
+    const candidates=candidatePool.filter(function(w){
       return w!==best && Math.abs(idxOf(w)-bi)>=4 && winPen(w)<=minPen+25;
     }).map(function(w){ return {w:w,p:winPen(w)}; });
     candidates.sort(function(a,b){
@@ -463,7 +405,7 @@ function renderSimple(view){
     alt=candidates.length?candidates[0].w:null;
   }
   if(alt){
-    const av=verdictOf(alt);
+    const av=windowVerdict(alt,selected.tier);
     altBox.innerHTML='<span class="s-altbox"><span class="s-altk">备选</span>'
       +'<b>'+alt.days[0].date+' '+alt.days[0].wd+' — '+alt.days[3].date+' '+alt.days[3].wd+'</b>'
       +'<span>出发 '+alt.days[0].date+' · 返程 '+alt.days[3].date+'</span>'
@@ -476,25 +418,6 @@ function renderSimple(view){
 
 
 /* ---------- 三个事实 ---------- */
-function renderFacts(view){
-  const days=view.days, st=streaks(days);
-  const fh=document.getElementById('fh');
-  if(fh) fh.textContent = '关键指标';
-  document.getElementById('f1').innerHTML = st.len>=4
-    ? '预报里已经出现 <b>'+st.range+'</b>，连续 '+st.len+' 天都能过——四天连排成立。'
-    : '预报里最长只连着 <b>'+st.len+' 天</b>能过'+(st.range?'（'+st.range+'）':'')+'，四天还差 '+(4-st.len)+' 天。';
-  let wd=null, wmm=0;
-  days.forEach(d=>d.recs.forEach(r=>{ if(r.mm!=null && r.mm>wmm){ wmm=r.mm; wd=d; } }));
-  document.getElementById('f2').innerHTML = wd
-    ? '最湿的一天是 <b>'+wd.date+'</b>：有一家报到 <b>'+wmm.toFixed(1)+'mm</b>，那天别排户外。'
-    : '预报窗口内没有明显强降水日，问题全在云量上。';
-  const over=days.filter(d=>!d.ok && d.outReason==='阴').length, rain=days.filter(d=>!d.ok && d.outReason==='雨').length;
-  const clean=days.length-over-rain;
-  const tail = rain>over ? '真正拦住的是雨。' : (over>rain ? '真正拦住的是阴。' : '阴和雨各占一半，谁也没少拦。');
-  document.getElementById('f3').innerHTML = '这 '+days.length+' 天里 <b>'+rain+' 天有雨</b>、<b>'+over+' 天是阴</b>，只剩 '+(clean<0?0:clean)+' 天能过'
-    + (over? '。阴占了 '+Math.round(over/days.length*100)+'%' : '') + '——' + tail;
-}
-
 /* ---------- 图标 ---------- */
 function svgIcon(t){
   const S='<svg viewBox="0 0 30 26" width="26" height="22" aria-hidden="true">';
@@ -531,7 +454,16 @@ function renderCal(view){
       +'<div class="cf">'+(d.lead<=3?'短期':d.lead<=7?'中期':d.lead<=10?'趋势':'低置信')+'·'+d.confText
       +(d.ok?'':('·'+(d.outReason==='阴'?(d.loose? '阴次档':'阴'):(d.outReason==='雨'?'雨':(d.outReason==='数据不足'?'缺':(d.outReason==='仅一家'?'1家':'远'))))))+'</div>'
       +(d.actualNote? '<div class="anote">'+d.actualNote+'</div>' : (d.mist? '<div class="anote">零星小雨，不算下雨</div>' : ''));
-    b.addEventListener('click',()=>openPanel(d,b));
+    b.addEventListener('click',()=>{
+      openPanel(d,b);
+      if(typeof fetchRainHours==='function' && d.rainHoursState!=='ready' && d.rainHoursState!=='unavailable'){
+        const pending=fetchRainHours(view);
+        openPanel(d,b);
+        pending.then(()=>{
+          if(b.isConnected && b.getAttribute('aria-current')==='true') openPanel(d,b);
+        });
+      }
+    });
     cal.appendChild(b);
   });
 }
@@ -546,10 +478,14 @@ function openPanel(d,btn){
     : d.lead>7? '远期只作趋势参考，不出确定结论' : '置信度不够';
   const skyTxt = d.thin? '数据缺失，不能按晴或无雨处理'
     : d.modal+'（'+d.nOrg+' 家机构里 '+d.agree+' 个模式同向，ECMWF 与 ECMWF-AI 只算一家）';
+  const hourlyText=d.rainHoursState==='loading'? '正在读取逐小时降雨…'
+    : d.rainHoursState==='unavailable'? '逐小时数据暂不可用'
+    : d.rainHoursState==='ready'? (d.rainHours && d.rainHours.length? d.rainHours.join('、') : '未出现 ≥0.2mm/h 的时段')
+    : '点击日期后读取';
   const rainTxt = (d.popMed==null? '降水概率：各家都没给，显示缺失' : '降水概率 中位 '+Math.round(d.popMed)+'%｜最高 '+Math.round(d.popMax)+'%')
     +'<br>预期雨量：'+(d.mmMed==null? '缺失' : '中位 '+d.mmMed.toFixed(1)+'mm')
     +'<br>降雨级别：'+(d.rainLevel==='无'? '无明显降雨' : d.rainLevel==='零星'? '零星小雨，不按下雨处理' : '明显降雨')
-    +'<br>逐小时时段：'+(d.rainHours && d.rainHours.length? d.rainHours.join('、') : '未出现 ≥0.2mm/h 的时段');
+    +'<br>逐小时时段：'+hourlyText;
   const comfortTxt = '最高 '+(d.hi==null?'—':d.hi.toFixed(1)+'°')+'，最低 '+(d.lo==null?'—':d.lo.toFixed(1)+'°')
     +'<br>最大风速：'+(d.wind==null? '缺失' : Math.round(d.wind)+' km/h')
     +'<br>'+(d.rainy? '有雨，户外安排要改' : d.modal==='阴'? '不晒，适合逛街，拍照偏灰' : '适合户外，注意早晚温差');
@@ -570,12 +506,7 @@ function openPanel(d,btn){
       +'<td class="c">'+(r.wind==null?'—':Math.round(r.wind))+'</td>'
       +'</tr>').join('')
     +'</tbody></table>';
+  if(typeof wrapTables==='function') wrapTables();
   p.scrollIntoView({block:'nearest',behavior:'smooth'});
-}
-function newChart(el){
-  const old=echarts.getInstanceByDom(el);
-  if(old) old.dispose();
-  el.innerHTML='';
-  return echarts.init(el,null,{renderer:'canvas'});
 }
 /* ---------- 排名图 ---------- */
