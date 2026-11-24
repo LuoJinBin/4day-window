@@ -181,7 +181,7 @@ heavy    = 重雨权重过半
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT` | `8787` | 监听端口 |
-| `HOST` | `0.0.0.0` | 监听地址；本机可改为 `127.0.0.1` |
+| `HOST` | `127.0.0.1` | 监听地址；容器/Render 等托管环境显式设置为 `0.0.0.0` |
 | `CACHE_TTL_MINUTES` | `360` | 缓存有效期（与页面 6 小时一致） |
 | `REFRESH_INTERVAL_MINUTES` | `360` | 定时刷新间隔，最小 5 分钟 |
 | `CACHE_FILE` | `data/cache/forecast.json` | 磁盘缓存路径 |
@@ -209,7 +209,7 @@ heavy    = 重雨权重过半
 
 - **Vercel Production**：静态页面 + `api/forecast.js`、`api/health.js` 两个 Node Functions。`vercel.json` 为预报函数设置 `hkg1` 区域与 60 秒最长运行时间；函数使用 `/tmp/gz-weather-forecast.json` 和实例内存缓存。生产域名：`https://guangzhou-4day-window.vercel.app/`。
 - **自动部署状态**：GitHub 私有仓库尚未连接 Vercel Git 自动部署；当前线上版本由 `fix/full-hardening` 分支固定提交手动上传。后续源码更新后必须重新部署，不能只 push 就认为线上已更新。
-- **本地/容器服务**：`npm start`；默认监听 `0.0.0.0:8787`，适用于容器和 Render。生产服务需要可写的 `data/cache/`；单进程即可，定时器进程内运行，无需 cron。
+- **本地/容器服务**：`npm start`；默认仅监听 `127.0.0.1:8787`，不向局域网开放。容器或 Render 部署时，在平台环境变量中显式设置 `HOST=0.0.0.0`。生产服务需要可写的 `data/cache/`；单进程即可，定时器进程内运行，无需 cron。
 - **纯静态托管**：只上传 `public/` 时，页面会尝试 `/api/forecast`，若接口不存在则回退浏览器直连；在无法直连 Open-Meteo 的网络环境下，天气刷新会失败。
 - 继续用豆包 HTML 应用发布时：`lark-cli apps +deploy --file-path "<相对路径>" --app-id app_17j5a7evesj`，再用 `+release-get` 轮询到 `finished`。注意 `--file-path` 只收相对 cwd 的路径，且必须与 `cd` 同一条命令。
 
