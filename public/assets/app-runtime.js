@@ -56,77 +56,7 @@ async function refreshActual(){
   }catch(err){ console.warn('[actual] refresh failed:',err && err.message? err.message:err); }
 }
 
-/* ---------- 报得准不准（页面自己记、自己打分） ---------- */
-const HIST_KEY='gz_wx_hist_v1';
-function pad2(n){ return ('0'+n).slice(-2); }
 function isoOf(d){ return chinaIso(d); }
-function saveHist(view){
-  if(!view || view.src!=='live' || view.stale || !view.days || !view.days.length) return;
-  let m={}; try{ m=JSON.parse(localStorage.getItem(HIST_KEY)||'{}'); }catch(e){ m={}; }
-  if(!m || typeof m!=='object' || Array.isArray(m)) m={};
-  m[isoOf(new Date())]={t:Date.now(), days:view.days.map(d=>({date:d.date, modal:d.modal, rainy:!!d.rainy, popMed:d.popMed, popMax:d.popMax, hi:d.hi, lo:d.lo}))};
-  const keys=Object.keys(m).sort();
-  while(keys.length>14){ delete m[keys.shift()]; }
-  try{ localStorage.setItem(HIST_KEY, JSON.stringify(m)); }catch(e){}
-}
-function wouldRain(d){ if(d.rainy!=null) return !!d.rainy; return /雨/.test(d.modal||'') || (d.popMed!=null && d.popMed>=70); }
-async function renderAcc(){
-  const top=document.getElementById('acctop');
-  if(!top) return;
-  const tab=document.getElementById('acctab'), cap=document.getElementById('acccap');
-  let daily=ACTUAL;
-  if(!daily || !daily.time){ top.innerHTML='实况取不到（离线或接口没响应），这一节先空着，下次打开再试。'; tab.innerHTML=''; if(cap) cap.textContent=''; return; }
-  const A={};
-  daily.time.forEach((iso,i)=>{ A[iso]={ mm: daily.precipitation_sum[i], hi: daily.temperature_2m_max[i], lo: daily.temperature_2m_min[i] }; });
-  let hist={}; try{ hist=JSON.parse(localStorage.getItem(HIST_KEY)||'{}'); }catch(e){ hist={}; }
-  const histKeys=Object.keys(hist).sort();
-  // 历史回看：只看"某天之前存的预报"对那天的预测
-  const rows=[];
-  Object.keys(A).sort().forEach(iso=>{
-    if(iso>=isoOf(new Date())) return;            // 今天和未来不算历史
-    const a=A[iso]; const mm=a.mm||0;
-    const key=histKeys.filter(k=> k<iso).pop();   // 上一个抓取日
-    const pred=key? (hist[key].days||[]).find(d=> d.date===iso.slice(5)) : null;
-    if(!pred) return;
-    const pRain=wouldRain(pred), aRain=mm>=0.5;
-    rows.push({iso:iso, from:key, pred:pred, pRain:pRain, aRain:aRain, hit:pRain===aRain,
-      dHi: (pred.hi!=null&&a.hi!=null)? Math.abs(pred.hi-a.hi) : null, mm:mm});
-  });
-  // 今天：拿当前这份预报对今天到现在为止的实况，先看个大概
-  const todayIso=isoOf(new Date());
-  const todayPred=(VIEW&&VIEW.days)? VIEW.days.find(d=> d.date===todayIso.slice(5)) : null;
-  const todayA=typeof daily.__bornToday==='number'? A[todayIso] : null;
-
-  const hitN=rows.filter(r=>r.hit).length;
-  const hiErr=rows.filter(r=>r.dHi!=null).map(r=>r.dHi);
-  const avgErr=hiErr.length? (hiErr.reduce((x,y)=>x+y,0)/hiErr.length) : null;
-  let topText='';
-  if(rows.length){
-    topText='过去 '+rows.length+' 天里，有没有雨的判断报对了 <b>'+hitN+' 天</b>'
-      + (avgErr!=null? '，最高温平均差 <b>'+avgErr.toFixed(1)+'℃</b>': '') + '。';
-  }else{
-    topText='还没有可对照的历史：页面从今天起每天存一份预报，明天打开就能看到第一批打分。';
-  }
-  if(todayPred && todayA){
-    const tRain=(todayA.mm||0)>=0.5;
-    topText += ' 今天（'+todayIso.slice(5)+'）到现在'+(tRain? '下了 <b>'+((todayA.mm||0).toFixed(1))+'mm</b>' : '没下雨')
-      +'，最高 <b>'+Math.round(todayA.hi)+'°</b>'+(todayPred.actualNote? (todayPred.actualNote.indexOf('预报有雨')===0? '；预报本来报的是雨' : '；'+todayPred.actualNote) : '；页面报 '+todayPred.modal)+'。今天还没过完，只当个早检查。';
-  }
-  top.innerHTML=topText;
-
-  const body=rows.slice(-7).map(r=>{
-    const res = r.hit? '<b style="color:#2C7351">对</b>' : '<b style="color:#A8422A">错</b>';
-    return '<tr><td>'+r.iso.slice(5)+'</td><td>'+r.from.slice(5)+' 的预报</td>'
-      +'<td>'+(r.pRain?'有雨':'无雨')+'（'+r.pred.modal+'）</td>'
-      +'<td>'+(r.aRain? '有雨 '+(r.mm.toFixed(1))+'mm' : '无雨')+'</td>'
-      +'<td>'+(r.dHi!=null? r.dHi.toFixed(1)+'℃' : '—')+'</td><td>'+res+'</td></tr>';
-  }).join('');
-  tab.innerHTML = '<colgroup><col style="width:14%"><col style="width:22%"><col style="width:22%"><col style="width:20%"><col style="width:12%"><col style="width:10%"></colgroup>'
-    +'<thead><tr><th>日期</th><th>哪天的预报</th><th>当时怎么报</th><th>实际</th><th>温差</th><th>结果</th></tr></thead>'
-    +'<tbody>'+(body||'<tr><td colspan="6" style="color:#6C7C77">还没有记录</td></tr>')+'</tbody>';
-  if(cap) cap.textContent='实况取自 Open-Meteo 的逐日分析值（过去 7 天），判雨标准是当日降水 ≥0.5mm。只统计"预报在当天之前就存下来"的那几天，当天临时改口不算数。';
-
-}
 
 /* ---------- 实时重算 ---------- */
 const SNAP = {days: DATA.days.map(function(d){return Object.assign({},d,{wMap:W_SCORE});}), windows:null, src:'snapshot'};
