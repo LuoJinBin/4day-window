@@ -234,19 +234,19 @@ function packDays(raw,timeZone=APP_TIME_ZONE){
 /* ---------- 结论文案 ---------- */
 /* ---------- 极简首屏：只回答去哪儿、什么时候、什么天气 ---------- */
 let LAST_TS=null;
-function fmtStamp(v){
+function fmtStamp(v,timeZone=APP_TIME_ZONE){
   if(v==null) return '—';
   if(typeof v==='string'){
     const parsed=Date.parse(v);
     if(!Number.isFinite(parsed) || !v.includes('T')) return v;
     v=parsed;
   }
-  return chinaStamp(v);
+  return chinaStamp(v,timeZone);
 }
-function setUpdated(v){
+function setUpdated(v,timeZone=APP_TIME_ZONE){
   LAST_TS=v;
   const el=document.getElementById('sUpdated');
-  if(el) el.textContent='更新于 '+fmtStamp(v);
+  if(el) el.textContent='更新于 '+fmtStamp(v,timeZone);
 }
 function forecastMeta(payload, now=Date.now()){
   const raw=payload && payload.updatedAt;
@@ -313,10 +313,10 @@ function verdictOf(w){
   const hot=days.filter(function(d){ return d.hi!=null && d.hi>28; });
   const drench=days.filter(function(d){ return d.mmMed!=null && d.mmMed>=10; });
   if(drench.length){
-    return {k:'wait',t:'建议继续等待',why:drench.map(function(d){return d.date;}).join('、')+' 有大雨，四天里泡一天不划算；等预报把这段雨挪走再看。'};
+    return {k:'wait',t:'建议继续等待',why:drench.map(function(d){return d.date;}).join('、')+' 有大雨，这段行程里遇到大雨不划算；等预报把这段雨挪走再看。'};
   }
   if(pen<=22 && hiN.length===0 && midN.length===0 && minConf>=2){
-    return {k:'rec',t:'推荐出发',why:'这四天没有明显降雨，气温也舒服，可以按这趟安排。'};
+    return {k:'rec',t:'推荐出发',why:'这段日期没有明显降雨，气温也舒服，可以按这趟安排。'};
   }
   if(pen<=72 && hiN.length<=1 && minConf>=1){
     const bits=[];
@@ -359,9 +359,9 @@ function windowVerdict(w,tier){
     return {k:'maybe',t:'可以考虑',why:prefix+(extra?' '+extra:'')};
   }
   if(tier==='trend'){
-    return {k:'wait',t:'建议继续等待',why:'目前没有满足严格晴好或阴天放宽条件的四天窗口；'+(w.span||'这段日期')+'只作远期趋势参考，预报还会变化，不建议据此订行程。'};
+    return {k:'wait',t:'建议继续等待',why:'目前没有满足严格晴好或阴天放宽条件的 '+w.days.length+' 天连续窗口；'+(w.span||'这段日期')+'只作远期趋势参考，预报还会变化，不建议据此订行程。'};
   }
-  return {k:'wait',t:'建议继续等待',why:'当前预报没有满足严格晴好或阴天放宽条件的连续四天窗口，继续等待下一轮预报。'};
+  return {k:'wait',t:'建议继续等待',why:'当前预报没有满足严格晴好或阴天放宽条件的连续 '+w.days.length+' 天窗口，继续等待下一轮预报。'};
 }
 
 function renderSimple(view){
