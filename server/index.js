@@ -7,6 +7,7 @@ import { createForecastService } from './forecast-service.js';
 import { buildWindows } from '../src/core/logic.js';
 import { ageMinutes, isFresh } from './cache.js';
 import { startScheduler } from './scheduler.js';
+import { createLocationHandler, createPlanHandler } from './flexible-api.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const DATA = path.join(ROOT, 'data');
@@ -105,6 +106,8 @@ function serveStatic(req, res, url) {
 
 export function createApp(cfg = config, deps = {}) {
   const service = deps.service || createForecastService(cfg, deps);
+  const locationHandler = deps.locationHandler || createLocationHandler(deps);
+  const planHandler = deps.planHandler || createPlanHandler(deps);
   const server = http.createServer(async (req, res) => {
     let url;
     try {
@@ -119,6 +122,9 @@ export function createApp(cfg = config, deps = {}) {
         res.setHeader('allow', 'GET, HEAD');
         return json(res, 405, { error: 'method not allowed' });
       }
+      if (p === '/api/locations') return locationHandler(req, res);
+      if (p === '/api/plan') return planHandler(req, res);
+
       if (p === '/api/health') {
         const entry = service.peek();
         return json(res, 200, {
@@ -200,7 +206,7 @@ export function createApp(cfg = config, deps = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const server = createApp();
   server.listen(config.port, config.host, () => {
-    console.log('广州四天窗口监测 · http://' + config.host + ':' + config.port);
+    console.log('随心出行天气规划 · http://' + config.host + ':' + config.port);
     console.log('数据源 ' + config.forecastBase);
   });
   for (const sig of ['SIGINT', 'SIGTERM']) {

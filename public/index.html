@@ -3,84 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="广州中心城区未来四天晴好出行窗口监测，综合多家天气模式，提供逐日预报与温度降雨趋势。">
+<meta name="description" content="自由选择全球城市、出行日期和具体时段，查看逐小时天气并寻找更合适的出行时间。">
 <meta name="theme-color" content="#16636F">
-<title>广州 · 四天晴好窗口监测（阴天可放宽）</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2316636F'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23E3A63B'/%3E%3Cpath d='M2 26h28' stroke='%23F1F4F1' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
+<title>随心出行 · 天气规划</title>
 <link rel="stylesheet" href="./assets/app.css">
-
+<link rel="stylesheet" href="./assets/planner.css">
 </head>
 <body>
-
 <header class="masthead">
   <div class="wrap">
-    <div class="brand">广州 <span>/</span> 四天窗口监测</div>
-    <div class="mast-meta">广州中心城区 · 每天打开自动更新，直接给出发日期</div>
+    <div class="brand">随心出行 <span>/</span> 天气规划</div>
+    <div class="mast-meta">全球城市 · 自选日期 · 自定义时段 · 逐小时天气</div>
   </div>
 </header>
-
-
-<section class="simple">
-  <div class="wrap">
-    <p class="s-kicker">广州 · 四天三晚</p>
-    <div class="s-head">
-      <div>
-        <h1 class="s-range" id="sRange">—</h1>
-        <p class="s-sub" id="sSub">—</p>
+<main>
+  <section class="planner-hero">
+    <div class="wrap">
+      <div class="planner-heading">
+        <p class="planner-kicker">天气跟着你的计划走</p>
+        <h1>去哪儿、哪天、什么时段，自己选。</h1>
+        <p>查已经定好的行程，或者让系统帮你找一段天气更合适的时间。</p>
       </div>
-      <div class="s-verdict" id="sVerdict"></div>
-    </div>
-    <p class="s-why" id="sWhy"></p>
-    <div class="s-days" id="sDays"></div>
-    <div class="s-alt" id="sAlt"></div>
-    <div class="s-foot">
-      <span class="s-stamp" id="sUpdated" aria-live="polite">—</span>
-      <button type="button" class="s-btn" id="btnEvidence" aria-expanded="false" aria-controls="evidence">查看数据依据</button>
-    </div>
-  </div>
-</section>
-
-<div class="evidence" id="evidence" hidden>
-  <div class="wrap evidence-actions">
-    <div class="evidence-status">
-      <span class="dot" id="dot"></span>
-      <span id="status" role="status" aria-live="polite" aria-atomic="true">正在读取…</span>
-    </div>
-    <button id="btnRecalc" type="button">立即重算</button>
-  </div>
-  <div class="wrap evidence-sections">
-    <section class="sheet" id="evidence-daily">
-      <div class="rail">
-        <h2>逐日预报</h2>
-      </div>
-      <div class="body">
-        <div class="calwrap">
-          <div class="calinner">
-            <div class="cal" id="cal"></div>
+      <form id="plannerForm" class="planner-card">
+        <div class="city-field">
+          <label for="cityInput">目的地城市</label>
+          <div class="city-search">
+            <input id="cityInput" type="search" value="广州" placeholder="搜索城市，例如：东京、洛杉矶、成都" autocomplete="off" aria-autocomplete="list" aria-controls="cityResults">
+            <span class="city-search-icon" aria-hidden="true">⌕</span>
+          </div>
+          <div id="cityResults" class="city-results" role="listbox" hidden></div>
+          <p id="cityMeta" class="field-hint"></p>
+          <div class="quick-cities" aria-label="常用城市">
+            <span>常用：</span>
+            <button type="button" data-quick-city="广州">广州</button>
+            <button type="button" data-quick-city="北京">北京</button>
+            <button type="button" data-quick-city="上海">上海</button>
+            <button type="button" data-quick-city="深圳">深圳</button>
+            <button type="button" data-quick-city="东京">东京</button>
+            <button type="button" data-quick-city="新加坡">新加坡</button>
+            <button type="button" data-quick-city="洛杉矶">洛杉矶</button>
           </div>
         </div>
-        <div class="panel" id="panel" role="region" aria-label="所选日期天气详情" aria-live="polite" hidden></div>
-      </div>
-    </section>
-    <section class="sheet" id="evidence-trend">
-      <div class="rail">
-        <h2>温度与降雨趋势</h2>
-      </div>
-      <div class="body">
-        <div class="chart" id="trendchart"></div>
-      </div>
-    </section>
-  </div>
-</div>
 
-<script src="./assets/snapshot-data.js"></script>
+        <div class="mode-row" role="group" aria-label="查询方式">
+          <button type="button" class="mode-button active" data-mode="find" aria-pressed="true">
+            <strong>帮我找好天气</strong><small>选搜索范围和出行天数</small>
+          </button>
+          <button type="button" class="mode-button" data-mode="fixed" aria-pressed="false">
+            <strong>查我选的日期</strong><small>已经确定日期，直接看天气</small>
+          </button>
+        </div>
 
-<script>window.GZ_API_BASE = '/api/forecast';</script>
-<script src="./assets/app-core.js"></script>
-<script src="./assets/app-backtest.js"></script>
-<script src="./assets/app-charts.js"></script>
-<script src="./assets/app-runtime.js"></script>
+        <div id="findControls" class="date-grid">
+          <div class="date-field"><label for="searchStart">从哪天开始找</label><input id="searchStart" type="date" required></div>
+          <div class="date-field"><label for="searchEnd">找到哪天为止</label><input id="searchEnd" type="date" required></div>
+          <div id="durationField" class="date-field">
+            <label for="duration">连续出行几天</label>
+            <select id="duration">
+              <option value="1">1 天</option><option value="2">2 天</option><option value="3">3 天</option>
+              <option value="4" selected>4 天 3 晚</option><option value="5">5 天</option><option value="6">6 天</option><option value="7">7 天</option>
+            </select>
+          </div>
+        </div>
+        <div id="fixedControls" class="date-grid" hidden>
+          <div class="date-field"><label for="fixedStart">出发日期</label><input id="fixedStart" type="date" required></div>
+          <div class="date-field"><label for="fixedEnd">结束日期</label><input id="fixedEnd" type="date" required></div>
+          <p class="date-hint">可以查单日，也可以查连续多天，最长覆盖未来 16 天。</p>
+        </div>
 
+        <div class="period-field">
+          <div class="field-heading"><label>想看哪个时段</label><span>可选整天或精确到小时</span></div>
+          <div class="period-buttons" role="group" aria-label="出行时段">
+            <button type="button" data-period="day" class="period-button active" aria-pressed="true">全天 <small>06–22 点</small></button>
+            <button type="button" data-period="morning" class="period-button" aria-pressed="false">上午 <small>06–12 点</small></button>
+            <button type="button" data-period="afternoon" class="period-button" aria-pressed="false">下午 <small>12–18 点</small></button>
+            <button type="button" data-period="evening" class="period-button" aria-pressed="false">晚上 <small>18–24 点</small></button>
+            <button type="button" data-period="custom" class="period-button" aria-pressed="false">自定义</button>
+          </div>
+          <div id="customTimes" class="custom-times" hidden>
+            <label for="customStart">开始</label><input id="customStart" type="time" value="09:00" step="3600">
+            <span>到</span><label for="customEnd">结束</label><input id="customEnd" type="time" value="18:00" step="3600">
+            <small>按逐小时预报判断</small>
+          </div>
+        </div>
+
+        <div class="preference-row">
+          <div class="date-field">
+            <label for="rainPreference">下雨怎么考虑</label>
+            <select id="rainPreference"><option value="dry">尽量避雨</option><option value="light">短时小雨可以接受</option></select>
+          </div>
+          <button id="searchButton" class="search-button" type="submit">开始查询</button>
+        </div>
+        <p id="appStatus" class="app-status" role="status" aria-live="polite">正在准备天气查询…</p>
+      </form>
+      <p class="planner-footnote">可查询未来 16 天。越靠近出行日期，预报通常越有参考价值；城市天气以所选城市代表位置为准。</p>
+    </div>
+  </section>
+
+  <section id="results" class="results-section" hidden>
+    <div class="wrap">
+      <div class="results-heading">
+        <div><p id="resultEyebrow" class="results-eyebrow"></p><h2 id="resultTitle"></h2><p id="resultSub" class="results-sub"></p></div>
+        <span id="resultVerdict" class="result-verdict"></span>
+      </div>
+      <p id="resultReason" class="result-reason"></p>
+      <div id="resultStats" class="result-stats"></div>
+      <div id="alternatives" class="alternatives" hidden></div>
+      <div class="day-list-heading"><h3>每天的天气</h3><span>展开日期可看逐小时详情</span></div>
+      <div id="dayList" class="day-list"></div>
+      <div class="result-footer"><span id="resultUpdated"></span><span id="resultSource"></span></div>
+    </div>
+  </section>
+</main>
+<footer class="site-footer"><div class="wrap">天气预报用于行程参考，临近出发请再次确认。数据来源：Open-Meteo。</div></footer>
+<script src="./assets/planner.js"></script>
 </body>
 </html>
