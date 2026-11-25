@@ -13,7 +13,7 @@ const tripPeriod = byId('tripPeriod');
 const weekend = byId('weekend');
 const startTime = byId('startTime');
 const endTime = byId('endTime');
-const submit = byId('btnRecalc');
+const submit = byId('queryWeather');
 const status = byId('status');
 const result = byId('plannerResult');
 const evidence = byId('plannerEvidence');
@@ -395,7 +395,7 @@ function reasonText(window, manual) {
   }).slice(0, 4).map(([reason, dates]) => dates.length === window.days.length
     ? reason : dates.map(shortDate).join('、') + ' ' + reason);
   const lead = {
-    strict: window.days.some(day => day.diverge) ? '综合预报偏向晴好，仍有不确定性。' : '这段符合晴好条件。',
+    strict: window.days.some(day => day.diverge) ? '综合预报偏向晴好，仍有不确定性。' : '预计以晴或多云为主，明显降雨的风险较低。',
     loose: '这段可能有阴天，降雨风险较低，可考虑出行。',
     trend: '这段预报把握有限，适合先作备选。',
     unsuitable: manual ? '所选日期的天气不太适合户外出行。' : '所查范围内没有符合晴好或阴天放宽的时段。',

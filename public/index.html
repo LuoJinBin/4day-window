@@ -20,7 +20,7 @@
     <div class="planner-intro">
       <div>
         <h1>挑个好天气出发</h1>
-        <p>查出行日期，或让天气帮你选一天。</p>
+        <p>查指定日期，或找一段天气合适的日子。</p>
       </div>
       <div class="planner-local">
         <strong id="localCity">广州</strong>
@@ -84,7 +84,7 @@
               <option value="any">不限制周末</option>
             </select>
           </div>
-          <button type="submit" id="btnRecalc" class="planner-submit">查询天气</button>
+          <button type="submit" id="queryWeather" class="planner-submit">查询天气</button>
         </div>
       </form>
     </section>
@@ -94,6 +94,7 @@
       <article id="bestWindow" class="planner-card planner-result"></article>
       <section class="planner-card planner-comparison" aria-labelledby="comparisonTitle">
         <h2 id="comparisonTitle">日期对比</h2>
+        <p class="planner-help planner-hour-hint">点选日期查看逐小时天气</p>
         <div id="resultDays" class="planner-days"></div>
         <div id="hourDetails" class="planner-hour-details" hidden></div>
         <div id="alternatives" class="planner-alternatives" hidden></div>

@@ -81,7 +81,7 @@ if (!css.includes('#trendchart .trend-legend') || !css.includes('#trendchart .tr
 
 // The planner home and the legacy Guangzhou page are both entry points.
 for (const id of ['cityInput', 'cityResults', 'plannerForm', 'tripDays', 'startDate', 'endDate',
-  'tripPeriod', 'startTime', 'endTime', 'weekend', 'plannerResult', 'hourDetails', 'trendchart']) {
+  'tripPeriod', 'startTime', 'endTime', 'weekend', 'queryWeather', 'plannerResult', 'hourDetails', 'trendchart']) {
   if (!plannerHtml.includes('id="' + id + '"')) fail.push('规划首页缺少 ' + id);
 }
 if (!plannerHtml.includes('type="module" src="./assets/planner.js"')) fail.push('缺少出行规划模块');

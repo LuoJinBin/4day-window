@@ -414,6 +414,7 @@ footer b{color:var(--ink2)}
 .planner-comparison, .planner-evidence { margin-top: 13px; }
 .planner-comparison { padding: 15px; }
 .planner-comparison h2, .planner-evidence h2 { margin: 0 0 9px; font-size: 1.12rem; }
+.planner-hour-hint { margin: -4px 0 9px; }
 .planner-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 142px), 1fr)); gap: 8px; }
 .planner-days button { min-height: 88px; text-align: left; padding: 9px 10px; min-width: 0; }
 .planner-days button :is(span, strong) { display: block; }
@@ -433,6 +434,10 @@ footer b{color:var(--ink2)}
 .planner-evidence-body { border-top: 1px solid var(--planner-line); padding: 9px 15px 13px; }
 .planner-evidence-body p { color: var(--planner-muted); font-size: .875rem; }
 .planner-evidence-body a { color: var(--planner-accent); text-underline-offset: 2px; }
+@media (max-width: 679px) {
+  .planner-duration { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: center; }
+  .planner-duration select { margin-top: 0; }
+}
 @media (min-width: 680px) {
   .planner-width { width: min(100% - 56px, 1080px); }
   .planner-intro { padding-top: 35px; }
