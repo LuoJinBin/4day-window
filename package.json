@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "广州未来连续四天适宜出行窗口监测：多模式预报、窗口判定、ERA5 气候统计与回测",
+  "description": "全球城市自由出行天气规划：城市搜索、日期范围、逐小时天气与出行时段推荐",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=22"
