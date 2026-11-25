@@ -134,60 +134,45 @@ function wrapTables(){
 }
 
 function fetchRainHours(view){
-  if(!view || !Array.isArray(view.days)) return Promise.resolve(false);
-  if(RAIN_HOURS_VIEW===view && RAIN_HOURS_PROMISE) return RAIN_HOURS_PROMISE;
+  if(!view||!Array.isArray(view.days))return Promise.resolve(false);
+  if(RAIN_HOURS_VIEW===view&&RAIN_HOURS_PROMISE)return RAIN_HOURS_PROMISE;
   RAIN_HOURS_VIEW=view;
-  view.days.forEach(d=>{d.rainHoursState='loading';});
-  RAIN_HOURS_PROMISE=(async()=>{
-    const url='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
-      +'&hourly=precipitation&timezone=Asia%2FShanghai&forecast_days=8&models=ecmwf_ifs025,ukmo_seamless,icon_seamless';
-    const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),12000);
-    try{
-      const res=await fetch(url,{cache:'no-store',signal:ctl.signal});
-      if(!res.ok) throw new Error('hourly forecast unavailable');
-      const payload=await res.json();
-      const arr=(Array.isArray(payload)?payload:[payload]).filter(x=>x.hourly);
-      if(!arr.length) throw new Error('hourly forecast missing');
-      const times=arr[0].hourly.time,precip=arr[0].hourly.precipitation;
-      const aligned=Array.isArray(times)&&Array.isArray(precip)&&precip.length===times.length
-        &&arr.every(p=>Array.isArray(p.hourly.time)&&p.hourly.time.length===times.length
-          &&p.hourly.time.every((t,i)=>t===times[i])
-          &&Array.isArray(p.hourly.precipitation)&&p.hourly.precipitation.length===times.length);
-      if(!aligned) throw new Error('hourly timestamps are not aligned');
-      const byDay=Object.create(null);
-      for(let i=0;i<times.length;i++){
-        const time=times[i],hour=Number(time.slice(11,13));
-        if(!Number.isInteger(hour)) continue;
-        let sum=0,count=0;
-        arr.forEach(p=>{
-          const value=trendNumber(p.hourly.precipitation[i]);
-          if(value!=null){sum+=value;count++;}
-        });
-        if(!count || sum/count<0.2) continue;
-        const iso=time.slice(0,10);
-        (byDay[iso]=byDay[iso]||[]).push(hour);
-      }
-      view.days.forEach(d=>{d.rainHours=[];d.rainHoursState='ready';});
-      Object.keys(byDay).forEach(iso=>{
-        const d=view.days.find(x=>x.date===iso.slice(5));
-        if(!d) return;
-        const hours=byDay[iso].sort((a,b)=>a-b),runs=[];
-        let start=null,previous=null;
-        hours.forEach(hour=>{
-          if(start==null) start=hour;
-          else if(hour!==previous+1){runs.push([start,previous]);start=hour;}
-          previous=hour;
-        });
-        if(start!=null) runs.push([start,previous]);
-        d.rainHours=runs.map(r=>('0'+r[0]).slice(-2)+(r[0]===r[1]?' 时':'–'+('0'+(r[1]+1)).slice(-2)+' 时'));
-      });
-      return true;
-    }catch(error){
-      view.days.forEach(d=>{d.rainHoursState='unavailable';});
+  RAIN_HOURS_PROMISE=Promise.resolve().then(()=>{
+    const hourly=view.hourly;
+    if(!hourly||!Array.isArray(hourly.time)){
+      view.days.forEach(d=>{d.rainHours=[];d.rainHoursState='unavailable';});
       return false;
-    }finally{
-      clearTimeout(timer);
     }
-  })();
+    const models=typeof MDL!=='undefined'?Object.keys(MDL):[];
+    const byDay=Object.create(null);
+    for(let i=0;i<hourly.time.length;i++){
+      const stamp=hourly.time[i];
+      if(typeof stamp!=='string')continue;
+      const values=models.map(model=>{
+        const arr=hourly['precipitation_'+model];
+        return Array.isArray(arr)&&arr[i]!=null?Number(arr[i]):null;
+      }).filter(Number.isFinite);
+      if(!values.length)continue;
+      const amount=values.reduce((sum,value)=>sum+value,0)/values.length;
+      if(amount<0.2)continue;
+      const iso=stamp.slice(0,10),hour=Number(stamp.slice(11,13));
+      if(!Number.isInteger(hour))continue;
+      (byDay[iso]=byDay[iso]||[]).push(hour);
+    }
+    view.days.forEach(d=>{
+      d.rainHours=[];d.rainHoursState='ready';
+      const iso=d.iso||Object.keys(byDay).find(key=>key.slice(5)===d.date);
+      const hours=(byDay[iso]||[]).sort((a,b)=>a-b),runs=[];
+      let start=null,previous=null;
+      hours.forEach(hour=>{
+        if(start==null)start=hour;
+        else if(hour!==previous+1){runs.push([start,previous]);start=hour;}
+        previous=hour;
+      });
+      if(start!=null)runs.push([start,previous]);
+      d.rainHours=runs.map(r=>('0'+r[0]).slice(-2)+(r[0]===r[1]?' 时':'–'+('0'+(r[1]+1)).slice(-2)+' 时'));
+    });
+    return true;
+  });
   return RAIN_HOURS_PROMISE;
 }
