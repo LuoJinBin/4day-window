@@ -48,6 +48,7 @@ export const config = {
   cacheFile: process.env.CACHE_FILE || path.join(ROOT, 'data/cache/forecast.json'),
   forecastBase: process.env.OPEN_METEO_BASE || 'https://api.open-meteo.com/v1/forecast',
   points: parsePoints(process.env.FORECAST_POINTS),
+  timezone: process.env.FORECAST_TIME_ZONE || 'Asia/Shanghai',
   forecastDays: intEnv('FORECAST_DAYS', 16, 6, 16),
   requestTimeoutMs: intEnv('REQUEST_TIMEOUT_MS', 14000, 1000, 120000)
 };

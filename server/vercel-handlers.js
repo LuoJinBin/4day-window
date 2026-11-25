@@ -28,8 +28,9 @@ export function createForecastHandler(service, { allowForceRefresh = false } = {
     }
 
     try {
+      const activeService = typeof service === 'function' ? await service(url) : service;
       const force = allowForceRefresh && url.searchParams.get('force') === '1';
-      const result = await service.get({ force });
+      const result = await activeService.get({ force });
       if (!result || !result.ok) {
         return sendJson(req, res, result && result.status ? result.status : 503, {
           error: result && result.error ? result.error : 'forecast unavailable',
@@ -44,7 +45,9 @@ export function createForecastHandler(service, { allowForceRefresh = false } = {
         updatedAt: result.updatedAt || null,
         stale: result.stale === true,
         ageMinutes: Number.isFinite(result.ageMinutes) ? result.ageMinutes : null,
-        source: 'Open-Meteo · 6 models · 4 points',
+        source: 'Open-Meteo · 6 weather models',
+        timezone: result.timezone || 'Asia/Shanghai',
+        hourly: result.rawHourly || null,
         days: view.days,
         windows: Array.isArray(view.windows) ? view.windows : []
       });
@@ -53,6 +56,23 @@ export function createForecastHandler(service, { allowForceRefresh = false } = {
         error: err && err.message ? err.message : 'forecast server error',
         stale: true
       });
+    }
+  };
+}
+
+export function createGeocodeHandler(search) {
+  return async function geocodeHandler(req, res) {
+    if (!methodAllowed(req, res)) return;
+    let url;
+    try { url = new URL(req.url || '/api/geocode', 'https://vercel.invalid'); }
+    catch { return sendJson(req, res, 400, { error: 'bad request URL' }); }
+    const query = url.searchParams.get('q') || '';
+    if (query.trim().length < 2) return sendJson(req, res, 200, { results: [] });
+    try {
+      const results = await search(query);
+      return sendJson(req, res, 200, { results });
+    } catch (err) {
+      return sendJson(req, res, 502, { error: err && err.message ? err.message : 'city search unavailable' });
     }
   };
 }

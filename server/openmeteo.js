@@ -18,8 +18,8 @@ export function buildForecastUrl(cfg) {
     'latitude=' + lat,
     'longitude=' + lon,
     'daily=' + DAILY.join(','),
-    'hourly=weather_code',
-    'timezone=Asia%2FShanghai',
+    'hourly=weather_code,precipitation_probability,precipitation,temperature_2m,wind_speed_10m',
+    'timezone=' + encodeURIComponent(cfg.timezone || 'Asia/Shanghai'),
     'forecast_days=' + cfg.forecastDays,
     'forecast_hours=168',
     'past_hours=12',
@@ -183,8 +183,17 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
     }
   }
 
-  const view = fromOpenMeteo({ daily });
+  const hourlyList = Array.isArray(json)
+    ? json.map((x) => x.hourly).filter(Boolean)
+    : json && json.hourly ? [json.hourly] : [];
+  let hourly = null;
+  if (hourlyList.length === cfg.points.length) {
+    try { hourly = aggPoints(hourlyList); } catch { hourly = null; }
+  }
+  const timezone = (Array.isArray(json) ? json[0] && json[0].timezone : json && json.timezone)
+    || cfg.timezone || 'Asia/Shanghai';
+  const view = fromOpenMeteo({ daily, timezone });
   if (!view || !view.days || !view.days.length) throw new Error('数据不足，无法生成日视图');
 
-  return { view, rawDaily: daily, fetchedAt: new Date().toISOString(), url };
+  return { view, rawDaily: daily, rawHourly: hourly, timezone, fetchedAt: new Date().toISOString(), url };
 }

@@ -7,6 +7,8 @@ import { createForecastService } from './forecast-service.js';
 import { buildWindows } from '../src/core/logic.js';
 import { ageMinutes, isFresh } from './cache.js';
 import { startScheduler } from './scheduler.js';
+import { parseForecastLocation } from './location.js';
+import { searchCities } from './geocode.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const DATA = path.join(ROOT, 'data');
@@ -105,6 +107,13 @@ function serveStatic(req, res, url) {
 
 export function createApp(cfg = config, deps = {}) {
   const service = deps.service || createForecastService(cfg, deps);
+  const cityServices = new Map();
+  const getService = (url) => {
+    const parsed = parseForecastLocation(url, cfg, { cacheDir: path.join(ROOT, 'data/cache') });
+    if (parsed.key === 'default') return { service, location: parsed.location };
+    if (!cityServices.has(parsed.key)) cityServices.set(parsed.key, createForecastService(parsed.config, deps));
+    return { service: cityServices.get(parsed.key), location: parsed.location };
+  };
   const server = http.createServer(async (req, res) => {
     let url;
     try {
@@ -130,25 +139,35 @@ export function createApp(cfg = config, deps = {}) {
         });
       }
 
+      if (p === '/api/geocode') {
+        const results = await searchCities(url.searchParams.get('q'), { fetchImpl: deps.fetchImpl || fetch });
+        return json(res, 200, { results });
+      }
+
       if (p === '/api/forecast') {
+        const active = getService(url);
         const allowForce = process.env.ALLOW_FORCE_REFRESH === 'true';
         const force = allowForce && url.searchParams.get('force') === '1';
-        const r = await service.get({ force });
+        const r = await active.service.get({ force });
         if (!r.ok) return json(res, r.status || 503, { error: r.error, stale: true });
         return json(res, 200, {
           updatedAt: r.updatedAt,
           stale: r.stale,
           ageMinutes: r.ageMinutes,
-          source: 'Open-Meteo · 6 models · 4 points',
+          source: 'Open-Meteo · 6 weather models',
+          location: active.location,
+          timezone: r.timezone || active.location.timezone,
+          hourly: r.rawHourly || null,
           days: r.view.days,
           windows: Array.isArray(r.view.windows) ? r.view.windows : buildWindows(r.view.days)
         });
       }
 
       if (p === '/api/forecast/raw') {
-        const r = await service.get({});
+        const active = getService(url);
+        const r = await active.service.get({});
         if (!r.ok) return json(res, r.status || 503, { error: r.error, stale: true });
-        return json(res, 200, { updatedAt: r.updatedAt, stale: r.stale, ageMinutes: r.ageMinutes, rawDaily: r.rawDaily });
+        return json(res, 200, { updatedAt: r.updatedAt, stale: r.stale, ageMinutes: r.ageMinutes, rawDaily: r.rawDaily, rawHourly: r.rawHourly || null, timezone: r.timezone || active.location.timezone });
       }
 
       if (p === '/api/config') {

@@ -11,8 +11,8 @@ export function createForecastService(cfg, { fetchImpl = fetch, now = () => Date
     if (inflight) return inflight;
     inflight = (async () => {
       try {
-        const { view, rawDaily, fetchedAt, url } = await fetchForecast(cfg, { fetchImpl });
-        const next = { ts: now(), iso: fetchedAt, view, rawDaily, fetchUrl: url };
+        const { view, rawDaily, rawHourly, timezone, fetchedAt, url } = await fetchForecast(cfg, { fetchImpl });
+        const next = { ts: now(), iso: fetchedAt, view, rawDaily, rawHourly, timezone, fetchUrl: url };
         writeCache(cfg.cacheFile, next);
         entry = next;
         lastError = null;
@@ -43,7 +43,9 @@ export function createForecastService(cfg, { fetchImpl = fetch, now = () => Date
       ageMinutes: ageMinutes(entry, now()),
       updatedAt: entry.iso,
       view: entry.view,
-      rawDaily: entry.rawDaily
+      rawDaily: entry.rawDaily,
+      rawHourly: entry.rawHourly || null,
+      timezone: entry.timezone || cfg.timezone || 'Asia/Shanghai'
     };
   }
 
