@@ -45,7 +45,7 @@ export const config = {
   host: process.env.HOST && process.env.HOST.trim() ? process.env.HOST.trim() : '127.0.0.1',
   cacheTtlMs: intEnv('CACHE_TTL_MINUTES', 360, 5, 1440) * 60 * 1000,
   refreshMinutes: intEnv('REFRESH_INTERVAL_MINUTES', 360, 5, 1440),
-  cacheFile: process.env.CACHE_FILE || path.join(ROOT, 'data/cache/forecast.json'),
+  cacheFile: process.env.CACHE_FILE || path.join(ROOT, 'data/cache/forecast-v10.json'),
   forecastBase: process.env.OPEN_METEO_BASE || 'https://api.open-meteo.com/v1/forecast',
   points: parsePoints(process.env.FORECAST_POINTS),
   timezone: process.env.FORECAST_TIME_ZONE || 'Asia/Shanghai',

@@ -6,7 +6,7 @@ const TTL = 10 * 60 * 1000;
 export async function searchCities(query, { fetchImpl = fetch, now = () => Date.now() } = {}) {
   const q = String(query || '').trim().replace(/\s+/g, ' ');
   if (q.length < 2) return [];
-  if (q.length > 80) throw new Error('城市名称最多输入 80 个字符');
+  if (q.length > 80) { const error = new Error('城市名称最多输入 80 个字符'); error.statusCode = 400; throw error; }
   const key = q.toLocaleLowerCase();
   const saved = cache.get(key);
   if (saved && now() - saved.ts < TTL) return saved.results;

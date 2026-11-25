@@ -72,7 +72,7 @@ export function createGeocodeHandler(search) {
       const results = await search(query);
       return sendJson(req, res, 200, { results });
     } catch (err) {
-      return sendJson(req, res, 502, { error: err && err.message ? err.message : 'city search unavailable' });
+      return sendJson(req, res, err && err.statusCode ? err.statusCode : 502, { error: err && err.message ? err.message : 'city search unavailable' });
     }
   };
 }

@@ -140,8 +140,12 @@ export function createApp(cfg = config, deps = {}) {
       }
 
       if (p === '/api/geocode') {
-        const results = await searchCities(url.searchParams.get('q'), { fetchImpl: deps.fetchImpl || fetch });
-        return json(res, 200, { results });
+        try {
+          const results = await searchCities(url.searchParams.get('q'), { fetchImpl: deps.fetchImpl || fetch });
+          return json(res, 200, { results });
+        } catch (err) {
+          return json(res, err && err.statusCode ? err.statusCode : 502, { error: err.message || '城市搜索暂时不可用' });
+        }
       }
 
       if (p === '/api/forecast') {
