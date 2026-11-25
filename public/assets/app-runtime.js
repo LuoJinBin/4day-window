@@ -542,10 +542,6 @@ async function boot(){
   await loadSelectedCity(false);
 }
 
-async function boot(){
-  ACTIVE_LOCATION=loadLocation();updateCityDisplay();initializePlannerControls(null,false);bindPlannerControls();
-  await loadSelectedCity(false);
-}
 document.getElementById('btnEvidence').addEventListener('click',function(){
   const ev=document.getElementById('evidence'),opening=ev.hasAttribute('hidden');
   if(opening){ev.removeAttribute('hidden');this.textContent='收起数据依据';this.setAttribute('aria-expanded','true');}
