@@ -52,7 +52,7 @@ export function createForecastHandler(service, { allowForceRefresh = false } = {
         windows: Array.isArray(view.windows) ? view.windows : []
       });
     } catch (err) {
-      return sendJson(req, res, 500, {
+      return sendJson(req, res, err && err.statusCode ? err.statusCode : 500, {
         error: err && err.message ? err.message : 'forecast server error',
         stale: true
       });

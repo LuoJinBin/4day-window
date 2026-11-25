@@ -95,7 +95,7 @@ const CODE = (c)=> c===0||c===1?['晴','晴']: c===2?['多云','多云']: c===3|
   : c<=86?['阵雨','雨']: ['雷阵雨','雨'];
 
 function fromOpenMeteo(json){
-  const d=json.daily, t=d.time; if(!t) return null;
+  const d=json.daily, t=d.time, timeZone=json.timezone || 'Asia/Shanghai'; if(!t) return null;
   const models=Object.keys(MDL);
   const recsByDay=t.map(()=>([]));
   models.forEach(m=>{
@@ -113,13 +113,13 @@ function fromOpenMeteo(json){
     });
   });
   const days=t.map((iso,i)=>{
-    const dt=new Date(iso+'T00:00:00');
+    const dt=new Date(iso+'T12:00:00Z');
     const recs=recsByDay[i].filter(r=>r.hi!=null);
-    return {date:iso.slice(5), wd:WD[dt.getDay()], recs:recs};
+    return {date:iso.slice(5), iso:iso, wd:WD[dt.getUTCDay()], recs:recs};
   });
   if(days.length<6) return null;
-  const built=packDays(days);
-  return {days:built, windows:buildWindows(built), src:'live'};
+  const built=packDays(days,timeZone);
+  return {days:built, windows:buildWindows(built), src:'live', timezone:timeZone};
 }
 
 function loadCache(){

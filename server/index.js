@@ -145,7 +145,9 @@ export function createApp(cfg = config, deps = {}) {
       }
 
       if (p === '/api/forecast') {
-        const active = getService(url);
+        let active;
+        try { active = getService(url); }
+        catch (err) { return json(res, 400, { error: err.message || '城市参数无效' }); }
         const allowForce = process.env.ALLOW_FORCE_REFRESH === 'true';
         const force = allowForce && url.searchParams.get('force') === '1';
         const r = await active.service.get({ force });
@@ -164,7 +166,9 @@ export function createApp(cfg = config, deps = {}) {
       }
 
       if (p === '/api/forecast/raw') {
-        const active = getService(url);
+        let active;
+        try { active = getService(url); }
+        catch (err) { return json(res, 400, { error: err.message || '城市参数无效' }); }
         const r = await active.service.get({});
         if (!r.ok) return json(res, r.status || 503, { error: r.error, stale: true });
         return json(res, 200, { updatedAt: r.updatedAt, stale: r.stale, ageMinutes: r.ageMinutes, rawDaily: r.rawDaily, rawHourly: r.rawHourly || null, timezone: r.timezone || active.location.timezone });

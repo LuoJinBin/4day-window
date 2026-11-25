@@ -15,23 +15,23 @@ const NEED = {
 };
 const WD = ['周日','周一','周二','周三','周四','周五','周六'];
 const APP_TIME_ZONE='Asia/Shanghai';
-function chinaParts(value=new Date()){
+function chinaParts(value=new Date(),timeZone=APP_TIME_ZONE){
   const d=value instanceof Date? value : new Date(value);
   if(!Number.isFinite(d.getTime())) throw new Error('无效日期');
   const out={};
   new Intl.DateTimeFormat('en-CA',{
-    timeZone:APP_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit',
+    timeZone:timeZone || APP_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit',
     hour:'2-digit',minute:'2-digit',hourCycle:'h23'
   }).formatToParts(d).forEach(p=>{ if(p.type!=='literal') out[p.type]=p.value; });
   return out;
 }
-function chinaIso(value=new Date()){
-  const p=chinaParts(value);
+function chinaIso(value=new Date(),timeZone=APP_TIME_ZONE){
+  const p=chinaParts(value,timeZone);
   return p.year+'-'+p.month+'-'+p.day;
 }
-function chinaHour(value=new Date()){ return Number(chinaParts(value).hour); }
-function chinaStamp(value){
-  const p=chinaParts(value);
+function chinaHour(value=new Date(),timeZone=APP_TIME_ZONE){ return Number(chinaParts(value,timeZone).hour); }
+function chinaStamp(value,timeZone=APP_TIME_ZONE){
+  const p=chinaParts(value,timeZone);
   return Number(p.month)+'-'+p.day+' '+p.hour+':'+p.minute;
 }
 
@@ -146,13 +146,22 @@ function buildWindows(days){
   out.sort((a,b)=>compareWindowPreference(a,b,'bad',5));
   return out;
 }
-function leadOf(dateStr, now=new Date()){
-  const mm=parseInt(dateStr.slice(0,2),10), dd=parseInt(dateStr.slice(3,5),10);
-  if(!Number.isInteger(mm)||mm<1||mm>12||!Number.isInteger(dd)||dd<1||dd>31) return NaN;
-  const today=chinaParts(now), y=Number(today.year), currentMonth=Number(today.month);
-  const targetYear=mm<currentMonth? y+1 : y;
-  const target=Date.UTC(targetYear,mm-1,dd);
-  const base=Date.UTC(y,currentMonth-1,Number(today.day));
+function leadOf(dateStr, now=new Date(), timeZone=APP_TIME_ZONE){
+  if(typeof dateStr!=='string') return NaN;
+  let target;
+  if(/^\\d{4}-\\d{2}-\\d{2}$/.test(dateStr)){
+    const parts=dateStr.split('-').map(Number);
+    target=Date.UTC(parts[0],parts[1]-1,parts[2]);
+    if(new Date(target).toISOString().slice(0,10)!==dateStr) return NaN;
+  }else{
+    const mm=parseInt(dateStr.slice(0,2),10), dd=parseInt(dateStr.slice(3,5),10);
+    if(!Number.isInteger(mm)||mm<1||mm>12||!Number.isInteger(dd)||dd<1||dd>31) return NaN;
+    const today=chinaParts(now,timeZone), y=Number(today.year), currentMonth=Number(today.month);
+    const targetYear=mm<currentMonth? y+1 : y;
+    target=Date.UTC(targetYear,mm-1,dd);
+  }
+  const today=chinaIso(now,timeZone).split('-').map(Number);
+  const base=Date.UTC(today[0],today[1]-1,today[2]);
   return Math.round((target-base)/86400000);
 }
 function applyObservedDay(day, observation, options={}){
@@ -195,10 +204,10 @@ function applyObservedDay(day, observation, options={}){
   return out;
 }
 
-function completedHourlyRain(daily,hourly,now=new Date()){
+function completedHourlyRain(daily,hourly,now=new Date(),timeZone=APP_TIME_ZONE){
   if(!daily || !Array.isArray(daily.time) || !Array.isArray(daily.precipitation_sum)
     || !hourly || !Array.isArray(hourly.time) || !Array.isArray(hourly.precipitation)) return null;
-  const today=chinaIso(now), parts=chinaParts(now), cut=today+'T'+parts.hour+':00';
+  const today=chinaIso(now,timeZone), parts=chinaParts(now,timeZone), cut=today+'T'+parts.hour+':00';
   let total=0, count=0;
   for(let i=0;i<hourly.time.length;i++){
     const t=hourly.time[i], v=hourly.precipitation[i];
@@ -214,9 +223,9 @@ function completedHourlyRain(daily,hourly,now=new Date()){
   return {mm,hours:count};
 }
 
-function packDays(raw){
+function packDays(raw,timeZone=APP_TIME_ZONE){
   return raw.map(d=>{
-    const lead=d.lead!=null? d.lead : leadOf(d.date);
+    const lead=d.lead!=null? d.lead : leadOf(d.iso||d.date,new Date(),timeZone);
     const m=metrics(d.recs, d.wMap||W_SCORE, lead);
     return Object.assign({date:d.date, wd:d.wd}, m, {recs:d.recs});
   });

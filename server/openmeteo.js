@@ -183,9 +183,6 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
     }
   }
 
-  const hourlyList = Array.isArray(json)
-    ? json.map((x) => x.hourly).filter(Boolean)
-    : json && json.hourly ? [json.hourly] : [];
   let hourly = null;
   if (hourlyList.length === cfg.points.length) {
     try { hourly = aggPoints(hourlyList); } catch { hourly = null; }
