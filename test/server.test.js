@@ -160,7 +160,7 @@ test('Open-Meteo 拒绝日期错位或返回点位数量不足的数据', async 
   await assert.rejects(fetchForecast(cfg,{fetchImpl:response([base,base,base])}),/点位数量不符/);
 });
 
-test('HTTP：首页注入同源 API，接口与静态资源可用', async (t) => {
+test('HTTP：首页提供灵活天气规划页面，接口与静态资源可用', async (t) => {
   const fakeService = {
     get: async () => ({ ok: true, stale: false, ageMinutes: 3, updatedAt: '2026-11-20T05:00:00.000Z', view: SNAP, rawDaily: null }),
     refresh: async () => null,
@@ -196,7 +196,10 @@ test('HTTP：首页注入同源 API，接口与静态资源可用', async (t) =>
   assert.equal((await fetch(base + '/api/forecast', { method: 'POST' })).status, 405);
 
   const html = await (await fetch(base + '/')).text();
-  assert.match(html, /window\.GZ_API_BASE = '\/api\/forecast'/);
+  assert.match(html, /id="plannerForm"/);
+  assert.match(html, /assets\/planner\.js/);
+  assert.match(html, /assets\/planner\.css/);
+  assert.doesNotMatch(html, /window\.GZ_API_BASE/);
 
   const js = await fetch(base + '/assets/app-core.js');
   assert.equal(js.status, 200);
