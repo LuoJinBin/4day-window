@@ -94,7 +94,7 @@ const CODE = (c)=> c===0||c===1?['晴','晴']: c===2?['多云','多云']: c===3|
   : c<=57?['小雨','雨']: c<=67?['中雨','雨']: c<=77?['小雨','雨']: c<=82?['阵雨','雨']
   : c<=86?['阵雨','雨']: ['雷阵雨','雨'];
 
-function fromOpenMeteo(json){
+function fromOpenMeteo(json, options={}){
   const d=json.daily, t=d.time; if(!t) return null;
   const models=Object.keys(MDL);
   const recsByDay=t.map(()=>([]));
@@ -105,7 +105,7 @@ function fromOpenMeteo(json){
     if(!code) return;
     t.forEach((_,i)=>{
       if(code[i]==null || !hi || hi[i]==null) return;   // 这家当天没数据：记为缺失，不当作晴或无雨
-      const [lb]=CODE(code[i]);
+      const [lb]=(options.conditionForCode||CODE)(code[i]);
       recsByDay[i].push({p:m,name:MDL[m],cond:lb,hi:hi[i],lo:lo?lo[i]:null,
         pop: pp? (pp[i]==null?null:Math.round(pp[i])) : null,
         mm: mm? mm[i] : null,
@@ -113,11 +113,12 @@ function fromOpenMeteo(json){
     });
   });
   const days=t.map((iso,i)=>{
-    const dt=new Date(iso+'T00:00:00');
+    const dt=new Date(iso+'T00:00:00Z');
     const recs=recsByDay[i].filter(r=>r.hi!=null);
-    return {date:iso.slice(5), wd:WD[dt.getDay()], recs:recs};
+    return {date:iso.slice(5), wd:WD[dt.getUTCDay()], recs:recs,
+      lead:options.today? Math.round((Date.parse(iso)-Date.parse(options.today))/86400000) : undefined};
   });
-  if(days.length<6) return null;
+  if(days.length<(options.minDays||6)) return null;
   const built=packDays(days);
   return {days:built, windows:buildWindows(built), src:'live'};
 }
@@ -293,24 +294,26 @@ function snapshotFromCache(view, meta={}){
     updatedAt:Number.isFinite(meta.updatedAt)?meta.updatedAt:null,
     stale:meta.stale===true,ageMinutes:Number.isFinite(meta.ageMinutes)?meta.ageMinutes:null};
 }
-document.getElementById('btnRecalc').addEventListener('click',async function(){
-  this.disabled=true; setStatus('warn','正在重算…');
-  try{
-    const v=await fetchLive();
-    applyForecastResult(v);
-  }catch(err){
-    setStatus('err','重算失败（'+(err.message||'网络不通')+'），继续显示屏幕上这一次的结果','离线');
-  }finally{ this.disabled=false; refreshActual(); }
-});
+if (document.getElementById('sRange')) {
+  document.getElementById('btnRecalc').addEventListener('click',async function(){
+    this.disabled=true; setStatus('warn','正在重算…');
+    try{
+      const v=await fetchLive();
+      applyForecastResult(v);
+    }catch(err){
+      setStatus('err','重算失败（'+(err.message||'网络不通')+'），继续显示屏幕上这一次的结果','离线');
+    }finally{ this.disabled=false; refreshActual(); }
+  });
 
-document.getElementById('btnEvidence').addEventListener('click',function(){
-  const ev=document.getElementById('evidence');
-  const opening=ev.hasAttribute('hidden');
-  if(opening){ ev.removeAttribute('hidden'); this.textContent='收起数据依据'; this.setAttribute('aria-expanded','true'); }
-  else { ev.setAttribute('hidden',''); this.textContent='查看数据依据'; this.setAttribute('aria-expanded','false'); }
-  if(opening && VIEW){ try{ renderTrend(VIEW); wrapTables(); }catch(e){} }
-  this.scrollIntoView({behavior:'smooth',block:'start'});
-});
+  document.getElementById('btnEvidence').addEventListener('click',function(){
+    const ev=document.getElementById('evidence');
+    const opening=ev.hasAttribute('hidden');
+    if(opening){ ev.removeAttribute('hidden'); this.textContent='收起数据依据'; this.setAttribute('aria-expanded','true'); }
+    else { ev.setAttribute('hidden',''); this.textContent='查看数据依据'; this.setAttribute('aria-expanded','false'); }
+    if(opening && VIEW){ try{ renderTrend(VIEW); wrapTables(); }catch(e){} }
+    this.scrollIntoView({behavior:'smooth',block:'start'});
+  });
 
-window.addEventListener('load',function(){ if(window.echarts && window.VIEW){ try{ renderTrend(VIEW); }catch(e){} } });
-boot();
+  window.addEventListener('load',function(){ if(window.echarts && window.VIEW){ try{ renderTrend(VIEW); }catch(e){} } });
+  boot();
+}

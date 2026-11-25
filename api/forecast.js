@@ -1,5 +1,6 @@
 import appConfig from '../server/config.js';
 import { createForecastService } from '../server/forecast-service.js';
+import { createPlannerService } from '../server/planner-service.js';
 import { createForecastHandler } from '../server/vercel-handlers.js';
 
 // Vercel functions have an ephemeral, writable /tmp directory. Keep a warm-instance
@@ -11,5 +12,6 @@ const runtimeConfig = {
 const service = createForecastService(runtimeConfig);
 
 export default createForecastHandler(service, {
+  planner: createPlannerService(appConfig),
   allowForceRefresh: process.env.ALLOW_FORCE_REFRESH === 'true'
 });

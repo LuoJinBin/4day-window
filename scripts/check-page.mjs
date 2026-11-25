@@ -7,7 +7,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const fail = [];
 
-const html = read('public/index.html');
+const plannerHtml = read('public/index.html');
+const html = read('public/guangzhou.html');
 const JSPARTS = ['app-core.js', 'app-backtest.js', 'app-charts.js', 'app-runtime.js'];
 const js = JSPARTS.map((f) => read('public/assets/' + f)).join('\n');
 const css = read('public/assets/app.css');
@@ -16,7 +17,7 @@ const runtime = read('public/assets/app-runtime.js');
 const core = read('public/assets/app-core.js');
 
 // 1) app.js 语法
-for (const f of JSPARTS) {
+for (const f of [...JSPARTS, 'planner.js', 'planner-calendar.js', 'planner-model.js']) {
   const chk = spawnSync(process.execPath, ['--check', path.join(root, 'public/assets', f)], { encoding: 'utf8' });
   if (chk.status !== 0) fail.push('public/assets/' + f + ' 语法错误: ' + chk.stderr.split('\n')[0]);
 }
@@ -77,6 +78,19 @@ if (/fetchRainHours\(VIEW\)/.test(runtime)) fail.push('逐小时降雨不应在�
 if (runtime.includes('renderAcc') || runtime.includes('saveHist')) fail.push('已移除的历史准确率模块仍在运行时加载');
 if (!html.includes('aria-controls="evidence"') || !html.includes('role="status"')) fail.push('折叠区或数据状态缺少辅助技术标记');
 if (!css.includes('#trendchart .trend-legend') || !css.includes('#trendchart .trend-svg')) fail.push('缺少原生趋势图响应式样式');
+
+// The planner home and the legacy Guangzhou page are both entry points.
+for (const id of ['cityInput', 'cityResults', 'plannerForm', 'tripDays', 'startDate', 'endDate',
+  'tripPeriod', 'startTime', 'endTime', 'weekend', 'plannerResult', 'hourDetails', 'trendchart']) {
+  if (!plannerHtml.includes('id="' + id + '"')) fail.push('规划首页缺少 ' + id);
+}
+if (!plannerHtml.includes('type="module" src="./assets/planner.js"')) fail.push('缺少出行规划模块');
+if (!/<details id="plannerEvidence"/.test(plannerHtml) || /<details[^>]+ open/.test(plannerHtml)) {
+  fail.push('规划首页的数据依据应默认折叠');
+}
+if (!plannerHtml.includes('guangzhou.html') || !plannerHtml.includes('role="status"')) {
+  fail.push('规划首页缺少广州入口或状态提示');
+}
 
 if (fail.length) {
   console.error('check:page FAILED');

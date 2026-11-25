@@ -17,7 +17,7 @@ function methodAllowed(req, res) {
   return false;
 }
 
-export function createForecastHandler(service, { allowForceRefresh = false } = {}) {
+export function createForecastHandler(service, { allowForceRefresh = false, planner } = {}) {
   return async function forecastHandler(req, res) {
     if (!methodAllowed(req, res)) return;
     let url;
@@ -28,6 +28,9 @@ export function createForecastHandler(service, { allowForceRefresh = false } = {
     }
 
     try {
+      if (planner && (url.searchParams.has('latitude') || url.searchParams.has('longitude') || url.searchParams.has('timezone'))) {
+        return await sendPlanner(req, res, () => planner.forecast(url.searchParams));
+      }
       const force = allowForceRefresh && url.searchParams.get('force') === '1';
       const result = await service.get({ force });
       if (!result || !result.ok) {
@@ -66,5 +69,27 @@ export function createHealthHandler() {
       runtime: 'vercel-node-function',
       region: process.env.VERCEL_REGION || null
     });
+  };
+}
+
+async function sendPlanner(req, res, load) {
+  try {
+    const payload = await load();
+    return sendJson(req, res, 200, payload);
+  } catch (error) {
+    const status = [400, 422].includes(error.status) && error.nonRetryable !== true ? error.status
+      : error.status === 429 ? 429 : 503;
+    if (status === 429 && error.retryAfter) res.setHeader('retry-after', error.retryAfter);
+    const message = status === 429 ? '天气服务请求较多，请稍后再试'
+      : status === 503 ? '暂时无法获取数据，请稍后重试' : error.message;
+    return sendJson(req, res, status, { error: message });
+  }
+}
+
+export function createGeocodingHandler(planner) {
+  return async function geocodingHandler(req, res) {
+    if (!methodAllowed(req, res)) return;
+    const url = new URL(req.url || '/api/geocoding', 'https://vercel.invalid');
+    return sendPlanner(req, res, () => planner.search(url.searchParams));
   };
 }
