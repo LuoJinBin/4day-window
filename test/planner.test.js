@@ -88,6 +88,8 @@ test('夏令时跳过不存在的小时，回拨保留两个独立的小时及�
   assert.deepEqual(repeated.map(slot => slot.time), ['01:00', '01:00']);
   assert.deepEqual(repeated.map(slot => slot.offset), [-240, -300]);
   assert.equal(repeated[1].stamp - repeated[0].stamp, HOUR_MS);
+  const lastHalfHour = selectedHours('2026-11-01', periodOf('custom', '01:00', '01:30'), 'America/New_York').at(-1);
+  assert.equal(lastHalfHour.endStamp, Date.parse('2026-11-01T06:30Z'));
   assert.equal(selectedHours('2026-11-01', all, 'America/New_York').length, 25);
   const lordHowe = selectedHours('2026-10-04', periodOf('custom', '02:00', '02:30'), 'Australia/Lord_Howe');
   assert.equal(lordHowe.length, 0);
@@ -152,6 +154,19 @@ test('1、2、4、7 天窗口，指定日期不会被天气更好的日期自动
     assert.equal(manual.alternatives[0].start, addDays(start, 1));
     assert.equal(manual.current.score, makeWindow(start, length, days).score);
   }
+});
+
+test('自动查找跳过已结束的时段，手动查找保留今天', () => {
+  const start = '2026-11-27';
+  const end = '2026-11-28';
+  const days = new Map([start, end].map(date => [date, {
+    date, n: 6, conf: 3, score: 90, hi: 22, lo: 18, ok: true, loose: true, trend: true
+  }]));
+  const options = { days, start, end, length: 1, preference: 'any', coverageStart: start,
+    coverageEnd: end, earliest: end };
+  assert.equal(evaluatePlan({ ...options, mode: 'auto' }, scoring).current.start, end);
+  assert.equal(evaluatePlan({ ...options, mode: 'manual' }, scoring).current.start, start);
+  assert.equal(evaluatePlan({ ...options, end: start, mode: 'auto' }, scoring).current, null);
 });
 
 test('优先工作日和避开周末只改变排序，天气等级和评分保持原值', () => {

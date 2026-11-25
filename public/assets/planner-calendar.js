@@ -74,22 +74,20 @@ export function selectedHours(date, period, timezone) {
     const local = localParts(stamp, timezone);
     const minute = minuteOf(local);
     const lastMinute = minuteOf(localParts(stamp + HOUR_MS - MINUTE_MS, timezone));
-    let intersects = minute < end && lastMinute >= period.from;
+    let endStamp = minute < end && lastMinute >= period.from
+      ? stamp + Math.min(60, end - minute) * MINUTE_MS : null;
     if (lastMinute !== minute + 59) {
       // Some zones change their clocks by half an hour within a UTC forecast slot.
       // Check that the interval actually contains at least one selected wall minute.
-      intersects = false;
+      endStamp = null;
       for (let instant = stamp; instant < stamp + HOUR_MS; instant += MINUTE_MS) {
         const wallMinute = minuteOf(localParts(instant, timezone));
-        if (wallMinute >= period.from && wallMinute < end) {
-          intersects = true;
-          break;
-        }
+        if (wallMinute >= period.from && wallMinute < end) endStamp = instant + MINUTE_MS;
       }
     }
-    if (!intersects) continue;
+    if (endStamp == null) continue;
     const offset = (Date.parse(local.date + 'T' + local.time + 'Z') - stamp) / MINUTE_MS;
-    hours.push({ stamp, ...local, offset });
+    hours.push({ stamp, endStamp, ...local, offset });
   }
   return hours;
 }

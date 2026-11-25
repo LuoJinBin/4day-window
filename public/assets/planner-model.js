@@ -178,10 +178,11 @@ export function rankWindows(windows, preference, scoring) {
   return ranked;
 }
 
-export function evaluatePlan({ days, start, end, length, mode, preference, coverageStart, coverageEnd }, scoring) {
+export function evaluatePlan({ days, start, end, length, mode, preference, coverageStart, coverageEnd, earliest }, scoring) {
   const candidates = [];
-  const from = mode === 'manual' ? coverageStart : start;
+  const first = mode === 'manual' ? coverageStart : start;
   const to = mode === 'manual' ? coverageEnd : end;
+  const from = earliest && earliest > first ? earliest : first;
   for (let date = from; addDays(date, length - 1) <= to; date = addDays(date, 1)) {
     candidates.push(makeWindow(date, length, days));
   }

@@ -1,4 +1,4 @@
-import { addDays, dateDistance, GUANGZHOU, localParts, periodOf, QUICK_CITIES, validCity, validDate, weekday } from './planner-calendar.js';
+import { addDays, dateDistance, GUANGZHOU, localParts, periodOf, QUICK_CITIES, selectedHours, validCity, validDate, weekday } from './planner-calendar.js';
 import { assessDay, assessPeriod, evaluatePlan, hourDetails, indexHourly, TIERS, weatherLabel } from './planner-model.js';
 
 const scoring = { metrics, rankTripWindows, code: CODE, models: MDL };
@@ -337,6 +337,15 @@ async function runQuery() {
       updateCalendar(coverage.first, coverage.last);
     }
     const opts = planOptions(coverage.first, coverage.last);
+    if (opts.period.preset !== 'all') {
+      const lastSlot = selectedHours(today, opts.period, location.timezone).at(-1);
+      opts.elapsed = lastSlot && lastSlot.endStamp <= Date.now();
+      if (opts.elapsed) opts.earliest = addDays(today, 1);
+      if (opts.mode === 'auto' && opts.earliest && opts.start < opts.earliest &&
+        addDays(opts.earliest, opts.length - 1) > opts.end) {
+        throw new Error('今天的所选时段已结束，请延长日期范围或减少出行天数。');
+      }
+    }
     const daily = coverage.daily;
     let hourly = null;
     let indexed = null;
@@ -412,7 +421,8 @@ function renderPlan(plan, opts, context) {
   const summary = [context.location.name, opts.length + ' 天', periodLabel(opts.period), current.wk + ' 天周末'];
   if (current.score != null) summary.push('天气评分 ' + Math.round(current.score) + ' / 100');
   foot.append(...summary.map(text => element('span', text)));
-  byId('bestWindow').replaceChildren(top, element('p', reasonText(current, manual)), foot);
+  const elapsedNotice = manual && opts.elapsed && current.start < opts.earliest ? '今天的所选时段已结束。' : '';
+  byId('bestWindow').replaceChildren(top, element('p', elapsedNotice + reasonText(current, manual)), foot);
 
   const dailyButtons = current.days.map(day => {
     const control = button(null, () => openHours(day, control, opts, context));
@@ -428,7 +438,11 @@ function renderPlan(plan, opts, context) {
   const alternatives = byId('alternatives');
   const items = plan.alternatives.filter(window => window.tier !== 'unavailable').slice(0, 4);
   alternatives.replaceChildren();
-  alternatives.hidden = !items.length;
+  const showNoAlternatives = manual && ['unsuitable', 'unavailable'].includes(current.tier) && !items.length;
+  alternatives.hidden = !items.length && !showNoAlternatives;
+  if (showNoAlternatives) {
+    alternatives.append(element('p', '当前预报范围内暂未找到更合适的同长度行程。', 'planner-help'));
+  }
   if (items.length) {
     alternatives.append(element('h3', manual ? '附近更合适的日期' : '其他可对比的日期'));
     for (const window of items) {
