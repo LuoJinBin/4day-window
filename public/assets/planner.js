@@ -176,7 +176,7 @@ function windows(days,start,end,duration){
 }
 const fmt=(n,d=0)=>Number.isFinite(n)?Number(n).toFixed(d):'—';
 function renderHour(h){
-  return '<div class="hour-card"><div class="hour-time">'+esc(h.time.slice(11,16))+'</div><div class="hour-icon">'+icon(h.condition)+'</div>'
+  return '<div class="hour-card"><div class="hour-time">'+esc(h.time.slice(11,16)+(h.timeZoneAbbreviation?' '+h.timeZoneAbbreviation:''))+'</div><div class="hour-icon">'+icon(h.condition)+'</div>'
     +'<div class="hour-condition">'+esc(h.condition)+'</div><div class="hour-temp">'+fmt(h.temperature)+'°</div>'
     +'<div class="hour-rain">雨 '+(h.precipitationProbability==null?'—':Math.round(h.precipitationProbability)+'%')+'</div>'
     +'<div class="hour-amount">'+(h.precipitation==null?'—':fmt(h.precipitation,1)+'mm')+'</div></div>';

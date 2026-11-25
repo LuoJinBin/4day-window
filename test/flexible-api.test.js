@@ -58,6 +58,7 @@ test('灵活预报 URL 使用坐标自动识别时区并请求 16 天逐小时�
   assert.equal(url.searchParams.get('latitude'), '35.6762');
   assert.equal(url.searchParams.get('longitude'), '139.6503');
   assert.equal(url.searchParams.get('timezone'), 'auto');
+  assert.equal(url.searchParams.get('timeformat'), 'unixtime');
   assert.equal(url.searchParams.get('forecast_days'), '16');
   assert.equal(url.searchParams.get('forecast_hours'), '384');
   assert.equal(url.searchParams.get('past_hours'), '24');
@@ -144,4 +145,20 @@ test('城市搜索验证输入并返回带时区的地点', async () => {
   assert.equal(body.results[0].timezone, 'Asia/Tokyo');
   assert.equal(body.results[0].longitude, 139.6503);
   assert.equal(calls, 1);
+});
+
+test('Unix 时间戳按目的地时区转换，正确处理夏令时跳时', () => {
+  const raw = fixture();
+  raw.timezone = 'America/Los_Angeles';
+  raw.daily.time = [Date.parse('2026-03-08T08:00:00Z') / 1000];
+  raw.hourly.time = [
+    Date.parse('2026-03-08T09:00:00Z') / 1000,
+    Date.parse('2026-03-08T10:00:00Z') / 1000
+  ];
+  const result = normalizeFlexibleForecast(raw);
+  assert.equal(result.days[0].date, '2026-03-08');
+  assert.equal(result.hours[0].time, '2026-03-08T01:00');
+  assert.equal(result.hours[0].timeZoneAbbreviation, 'PST');
+  assert.equal(result.hours[1].time, '2026-03-08T03:00');
+  assert.equal(result.hours[1].timeZoneAbbreviation, 'PDT');
 });

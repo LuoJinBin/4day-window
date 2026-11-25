@@ -97,6 +97,39 @@ function readValues(block, variable, index) {
   });
 }
 
+function localTimeParts(timestamp, timeZone) {
+  const safeZone = (() => {
+    try { new Intl.DateTimeFormat('en-US', { timeZone }).format(); return timeZone; }
+    catch { return 'UTC'; }
+  })();
+  const date = new Date(Number(timestamp) * 1000);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: safeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(date);
+  const values = {};
+  parts.forEach((part) => { if (part.type !== 'literal') values[part.type] = part.value; });
+  const local = values.year + '-' + values.month + '-' + values.day + 'T' + values.hour + ':' + values.minute;
+  const abbreviation = new Intl.DateTimeFormat('en-US', { timeZone: safeZone, timeZoneName: 'short' })
+    .formatToParts(date).find((part) => part.type === 'timeZoneName')?.value || '';
+  return { date: local.slice(0, 10), time: local, abbreviation };
+}
+
+function localDateValue(value, timeZone) {
+  if (typeof value === 'number' || (typeof value === 'string' && /^\d{9,}$/.test(value))) {
+    return localTimeParts(value, timeZone).date;
+  }
+  return String(value).slice(0, 10);
+}
+
+function localHourValue(value, timeZone) {
+  if (typeof value === 'number' || (typeof value === 'string' && /^\d{9,}$/.test(value))) {
+    const local = localTimeParts(value, timeZone);
+    return { time: local.time, timeZoneAbbreviation: local.abbreviation };
+  }
+  return { time: String(value).slice(0, 16), timeZoneAbbreviation: '' };
+}
+
 function weightedCondition(values) {
   const votes = new Map();
   values.forEach(({ value, weight }) => {
@@ -143,6 +176,7 @@ export function buildFlexibleForecastUrl(latitude, longitude) {
   url.searchParams.set('latitude', String(latitude));
   url.searchParams.set('longitude', String(longitude));
   url.searchParams.set('timezone', 'auto');
+  url.searchParams.set('timeformat', 'unixtime');
   url.searchParams.set('forecast_days', '16');
   url.searchParams.set('forecast_hours', '384');
   url.searchParams.set('past_hours', '24');
@@ -157,7 +191,11 @@ export function normalizeFlexibleForecast(payload, updatedAt = new Date().toISOS
   if (!item || !item.daily || !item.hourly) {
     throw new Error('天气服务没有返回逐日和逐小时数据');
   }
-  const daily = aggregateBlock(item.daily, {
+  const timeZone = item.timezone || 'UTC';
+  const dailyBlock = { ...item.daily, time: item.daily.time.map((stamp) => localDateValue(stamp, timeZone)) };
+  const hourInfo = item.hourly.time.map((stamp) => localHourValue(stamp, timeZone));
+  const hourlyBlock = { ...item.hourly, time: hourInfo.map((entry) => entry.time) };
+  const daily = aggregateBlock(dailyBlock, {
     temperature: 'temperature_2m_max',
     temperatureMax: 'temperature_2m_max',
     temperatureMin: 'temperature_2m_min',
@@ -175,14 +213,15 @@ export function normalizeFlexibleForecast(payload, updatedAt = new Date().toISOS
     windSpeed: day.windSpeed,
     modelCount: day.modelCount
   }));
-  const hourly = aggregateBlock(item.hourly, {
+  const hourly = aggregateBlock(hourlyBlock, {
     temperature: 'temperature_2m',
     apparent: 'apparent_temperature',
     precipitation: 'precipitation',
     probability: 'precipitation_probability',
     wind: 'wind_speed_10m'
-  }, 'time').map((hour) => ({
+  }, 'time').map((hour, index) => ({
     time: hour.time,
+    timeZoneAbbreviation: hourInfo[index].timeZoneAbbreviation,
     condition: hour.condition,
     temperature: hour.temperature,
     apparentTemperature: hour.apparentTemperature,
