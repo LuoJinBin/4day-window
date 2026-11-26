@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SNAP, buildWindows, rankTripWindows, selectDisplayWindow, windowVerdict, verdictOf, winPen, riskOf, confTier, forecastMeta,
-  chinaParts, chinaIso, leadOf, applyObservedDay, completedHourlyRain, aggPoints,
+  SNAP, buildWindows, rankTripWindows, selectDisplayWindow, windowVerdict, verdictOf, winPen, riskOf, confTier, forecastMeta, metrics, wxWord, riskText,
+  chinaParts, chinaIso, leadOf, applyDayProgress, completedHourlyRainEstimate, aggPoints,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
 
@@ -96,37 +96,46 @@ test('广州日期与小时固定使用 Asia/Shanghai，不受访问者电脑时
   assert.equal(leadOf('11-22', instant), 1);
 });
 
-test('当天只累计已经结束的小时，并同步修正当天实况雨量', () => {
+test('当天前序时段只记录归档预报估算，不冒充实测或覆盖全天预报', () => {
   const daily={time:['2026-11-20','2026-11-21'],precipitation_sum:[99,0]};
   const hourly={
     time:['2026-11-20T05:00','2026-11-20T06:00','2026-11-20T07:00',
       '2026-11-20T08:00','2026-11-20T12:00','2026-11-20T13:00'],
     precipitation:[4,0.1,0.2,null,0.5,9]
   };
-  const result=completedHourlyRain(daily,hourly,new Date('2026-11-20T05:30:00.000Z'));
+  const result=completedHourlyRainEstimate(daily,hourly,new Date('2026-11-20T05:30:00.000Z'));
   assert.deepEqual(result,{mm:0.8,hours:3});
-  assert.equal(daily.__bornToday,0.8);
-  assert.equal(daily.precipitation_sum[0],0.8);
+  assert.equal(daily.__completedHoursRainMm,0.8);
+  assert.equal(daily.__completedHoursCount,3);
+  assert.equal(daily.__completedHoursRainDate,'2026-11-20');
+  assert.equal(daily.__completedHoursRainHour,13);
+  // The archived forecast estimate must not overwrite the full-day forecast total.
+  assert.equal(daily.precipitation_sum[0],99);
   assert.equal(daily.precipitation_sum[1],0);
 });
 
-test('当天实况未达到判雨阈值时保留剩余时段预报', () => {
-  const forecast = day({rainy:true,modal:'雨',rainLevel:'明显',ok:false,loose:false,trend:false});
-  const partial = applyObservedDay(forecast,{mm:0.4,code:0},{isToday:true,hour:10});
-  assert.equal(partial.rainy,true);
-  assert.equal(partial.modal,'雨');
-  assert.equal(partial.ok,false);
-  assert.match(partial.actualNote,/剩余时段仍按预报/);
-  assert.equal(partial.actual,undefined);
+test('当天前序估算无雨时，仍明确保留剩余时段的降雨预报', () => {
+  const forecast = day({rainy:true,modal:'雨',rainLevel:'明显',ok:false,loose:false,trend:false,conf:2});
+  const progress = applyDayProgress(forecast,{mm:0},{isToday:true,hour:10});
+  assert.equal(progress.progressEstimateMm,0);
+  assert.equal(progress.rainy,true);
+  assert.equal(progress.modal,'雨');
+  assert.equal(progress.ok,false);
+  assert.equal(progress.conf,2);
+  assert.equal(progress.actual,undefined);
+  assert.match(progress.progressNote,/归档预报回算/);
+  assert.match(progress.progressNote,/非实测/);
+  assert.equal(wxWord(progress),'前序估算无雨，后续仍有雨预报');
+  assert.equal(riskText(riskOf(progress),progress),'后续降雨 高');
 });
 
-test('当天已经观测到明显降雨时才把当天标记为已下雨', () => {
-  const forecast = day({rainy:false,modal:'多云',rainLevel:'无',ok:true,loose:true,trend:true});
-  const actual = applyObservedDay(forecast,{mm:1.2,code:61},{isToday:true,hour:11});
-  assert.equal(actual.rainy,true);
-  assert.equal(actual.modal,'雨');
-  assert.equal(actual.ok,false);
-  assert.equal(actual.actual,true);
+test('已过去日期的归档预报不能被当成实测天气覆盖', () => {
+  const forecast=day({rainy:false,modal:'多云',rainLevel:'无',ok:true,loose:true,trend:true});
+  const progress=applyDayProgress(forecast,{mm:12},{isToday:false,hour:11});
+  assert.equal(progress.rainy,false);
+  assert.equal(progress.modal,'多云');
+  assert.equal(progress.actual,undefined);
+  assert.equal(progress.progressEstimateMm,undefined);
 });
 
 test('四点合成规则与现有模型口径一致，并拒绝错位日期', () => {
@@ -147,12 +156,37 @@ test('四点合成规则与现有模型口径一致，并拒绝错位日期', ()
   assert.throws(()=>aggPoints([points[0],{...points[1],time:['2026-11-21']}]),/日期不一致/);
 });
 
-test('模型权重合计 1.0，ECMWF 两个产品按一家机构计票', () => {
+test('模型权重合计 1.0，机构内多模式按平均权重合成一票', () => {
   const sum = Object.values(W_MDL).reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(sum - 1) < 1e-9);
   assert.equal(Object.keys(MDL).length, 6);
   assert.equal(ORG.ecmwf_ifs025, ORG.ecmwf_aifs025_single);
   assert.equal(new Set(Object.values(ORG)).size, 5);
+
+  const recs = [
+    {p:'ecmwf_ifs025',name:'ECMWF',cond:'小雨',hi:24,lo:18,mm:0.2,pop:60,wind:8,out:false},
+    {p:'ecmwf_aifs025_single',name:'ECMWF-AI',cond:'小雨',hi:24,lo:18,mm:0.2,pop:60,wind:8,out:false},
+    {p:'ukmo_seamless',name:'UKMO',cond:'小雨',hi:24,lo:18,mm:0.2,pop:60,wind:8,out:false},
+    {p:'cma_grapes_global',name:'CMA',cond:'多云',hi:24,lo:18,mm:0,pop:5,wind:8,out:false},
+    {p:'icon_seamless',name:'ICON',cond:'多云',hi:24,lo:18,mm:0,pop:5,wind:8,out:false},
+    {p:'meteofrance_seamless',name:'Météo-FR',cond:'多云',hi:24,lo:18,mm:0,pop:5,wind:8,out:false}
+  ];
+  const twoAgencies = metrics(recs,{},1);
+  const ecmwf = twoAgencies.orgs.find(o=>o.org==='ECMWF');
+  assert.equal(ecmwf.w,0.18);
+  assert.equal(twoAgencies.nOrg,5);
+  assert.equal(twoAgencies.rainy,false);
+  assert.equal(twoAgencies.modal,'多云');
+
+  // Three independent institutions, not three model products, are enough for a weighted majority.
+  const threeAgencies = metrics(recs.map(r=>r.p==='cma_grapes_global'
+    ? {...r,cond:'小雨',mm:0.2,pop:60} : r),{},1);
+  assert.equal(threeAgencies.rainy,true);
+
+  // Two models from one institution that disagree must not turn into two separate votes.
+  const splitProvider = metrics(recs.map(r=>r.p==='ecmwf_aifs025_single'
+    ? {...r,cond:'多云',mm:0,pop:5} : r),{},1);
+  assert.equal(splitProvider.orgs.find(o=>o.org==='ECMWF').cat,'多云');
 });
 
 test('ERA5 气候统计覆盖 11 年且无缺日', () => {

@@ -52,11 +52,19 @@ function metrics(recs, wMap, lead){
   // 同一家机构的多个模式先合成一票，ECMWF 与 ECMWF-AI 不算两个独立机构
   const orgs=Object.keys(groups).map(function(org){
     const rs=groups[org];
-    const w=rs.reduce((s,r)=>s+(W_MDL[r.p]||0.1),0);
+    const modelWeights=rs.map(r=>W_MDL[r.p]||0.1);
+    // 同一机构的多个模式只算一票；机构权重取模式权重均值，不能因模式数量多而加权。
+    const w=modelWeights.reduce((s,v)=>s+v,0)/modelWeights.length;
     const cw={};
-    rs.forEach(r=>{ const c=RUB.cat[r.cond]; cw[c]=(cw[c]||0)+(W_MDL[r.p]||0.1); });
-    let cat='晴', best=-1;
-    Object.keys(cw).forEach(c=>{ if(cw[c]>best){best=cw[c];cat=c;} });
+    rs.forEach((r,i)=>{ const c=RUB.cat[r.cond]; cw[c]=(cw[c]||0)+modelWeights[i]; });
+    const modelWeightTotal=modelWeights.reduce((s,v)=>s+v,0);
+    let cat='多云', bestShare=0;
+    Object.keys(cw).forEach(c=>{
+      const share=cw[c]/modelWeightTotal;
+      if(share>bestShare){bestShare=share;cat=c;}
+    });
+    // 机构内部模式各执一词时，不用数组顺序强行判晴或判雨。
+    if(bestShare<=0.5) cat='多云';
     const avg=function(k){ const v=rs.map(r=>r[k]).filter(x=>x!=null); return v.length? v.reduce((a,b)=>a+b,0)/v.length : null; };
     return {org:org, w:w, cat:cat, mm:avg('mm'), pop:avg('pop'), hi:avg('hi'), lo:avg('lo'),
             wind:avg('wind'), n:rs.length, models:rs.map(r=>r.name)};
@@ -74,18 +82,18 @@ function metrics(recs, wMap, lead){
   let modal='晴', best=-1;
   Object.keys(catW).forEach(c=>{ if(catW[c]>best){best=catW[c];modal=c;} });
   const rainShare = wTotal>0? (catW['雨']||0)/wTotal : 0;
-  const realRain = orgs.some(o=> o.cat==='雨' && ((o.mm!=null && o.mm>=1.0) || (o.pop!=null && o.pop>=60)));
+  const forecastRainSignal = orgs.some(o=> o.cat==='雨' && ((o.mm!=null && o.mm>=1.0) || (o.pop!=null && o.pop>=60)));
   const heavyShare = wTotal>0? orgs.filter(o=> o.cat==='雨' && ((o.mm!=null && o.mm>=3.5) || (o.pop!=null && o.pop>=80)))
       .reduce((s,o)=>s+o.w,0)/wTotal : 0;
   const heavy = heavyShare>=0.5;
   const overcastOrgs = orgs.filter(o=>o.cat==='阴').length;
   const overcastShare = wTotal>0? (catW['阴']||0)/wTotal : 0;
   // 少数机构报阴保留为分歧信号，不再直接否决；阴天须达到独立机构加权多数。
-  if(modal==='雨' && !realRain) modal = overcastShare>=0.5 ? '阴' : '多云';
+  if(modal==='雨' && !forecastRainSignal) modal = overcastShare>=0.5 ? '阴' : '多云';
   const overcast = modal==='阴';
   const overcastMinority = !overcast && overcastShare>=0.3;
-  const rainy = (rainShare>=0.5 && realRain) || heavy;
-  const mist = orgs.some(o=>o.cat==='雨') && !realRain;
+  const rainy = (rainShare>=0.5 && forecastRainSignal) || heavy;
+  const mist = orgs.some(o=>o.cat==='雨') && !forecastRainSignal;
   const rainLevel = rainy? '明显' : (mist? '零星' : '无');
   const nOrg=orgs.length, nModel=use.length;
   const thin = nOrg<2;
@@ -155,48 +163,20 @@ function leadOf(dateStr, now=new Date()){
   const base=Date.UTC(y,currentMonth-1,Number(today.day));
   return Math.round((target-base)/86400000);
 }
-function applyObservedDay(day, observation, options={}){
+function applyDayProgress(day, progress, options={}){
   const out=Object.assign({},day);
-  const mm=observation && observation.mm!=null? Number(observation.mm) : NaN;
-  if(!Number.isFinite(mm)) return out;
-  const isToday=options.isToday===true;
+  const mm=progress && progress.mm!=null? Number(progress.mm) : NaN;
+  // Forecast API past_days is archived model output, not station observations.
+  // Attach it only as context for today's elapsed hours; never overwrite the all-day forecast.
+  if(!Number.isFinite(mm) || options.isToday!==true) return out;
   const hour=Number.isInteger(options.hour)? String(options.hour).padStart(2,'0') : '当前';
-  if(isToday && mm<1.0){
-    out.actualSoFar=true;
-    out.actualNote=mm>0
-      ? '截至 '+hour+':00 已累计 '+mm.toFixed(1)+'mm，尚未达到全天判雨阈值；剩余时段仍按预报'
-      : '截至 '+hour+':00 尚未观测到明显降雨；剩余时段仍按预报';
-    return out;
-  }
-  out.actual=true;
-  out.conf=3; out.confText='实况'; out.confWhy=isToday
-    ? '今天已观测到明显降雨，后续安排按已发生天气处理'
-    : '这一天已发生，用实际天气覆盖预报';
-  if(!isToday){
-    if(observation.hi!=null) out.hi=observation.hi;
-    if(observation.lo!=null) out.lo=observation.lo;
-  }
-  if(mm>=1.0){
-    out.rainy=true; out.modal='雨'; out.overcast=false;
-    out.ok=false; out.loose=false; out.trend=false; out.outReason='雨';
-    out.mist=false; out.rainLevel='明显';
-    out.actualNote='实况已下雨 '+mm.toFixed(1)+'mm';
-  }else{
-    out.rainy=false; out.rainLevel='无'; out.mist=false;
-    let cm=observation.code==null? null : codeToModal(observation.code);
-    if(cm==='雨') cm='多云';
-    if(cm) out.modal=cm; else if(out.modal==='雨') out.modal='多云';
-    out.overcast=out.modal==='阴';
-    out.ok=!out.thin && !out.overcast;
-    out.loose=!out.thin;
-    out.outReason=out.ok? '' : (out.overcast? '阴' : '');
-    out.actualNote=isToday? out.actualNote : (day.rainy? '预报有雨，实况未达到全天判雨阈值' : '实况未达到全天判雨阈值');
-  }
+  out.progressEstimateMm=Math.max(0,mm);
+  out.progressNote='截至 '+hour+':00，归档预报回算前序雨量 '+out.progressEstimateMm.toFixed(1)+'mm（非实测）；全天仍按剩余时段预报判断';
   return out;
 }
 
-function completedHourlyRain(daily,hourly,now=new Date()){
-  if(!daily || !Array.isArray(daily.time) || !Array.isArray(daily.precipitation_sum)
+function completedHourlyRainEstimate(daily,hourly,now=new Date()){
+  if(!daily || !Array.isArray(daily.time)
     || !hourly || !Array.isArray(hourly.time) || !Array.isArray(hourly.precipitation)) return null;
   const today=chinaIso(now), parts=chinaParts(now), cut=today+'T'+parts.hour+':00';
   let total=0, count=0;
@@ -208,9 +188,10 @@ function completedHourlyRain(daily,hourly,now=new Date()){
   }
   if(!count) return null;
   const mm=Math.round(total*10)/10;
-  daily.__bornToday=mm;
-  const index=daily.time.indexOf(today);
-  if(index>=0) daily.precipitation_sum[index]=mm;
+  daily.__completedHoursRainMm=mm;
+  daily.__completedHoursCount=count;
+  daily.__completedHoursRainDate=today;
+  daily.__completedHoursRainHour=Number(parts.hour);
   return {mm,hours:count};
 }
 
@@ -254,8 +235,16 @@ function riskOf(d){
   if(d.popMax!=null && d.popMax>=40) return 2;
   return 1;
 }
-function riskText(r){ return r===3? '降雨 高' : r===2? '降雨 中' : '降雨 低'; }
+function riskText(r,d){
+  const prefix=d && Number.isFinite(d.progressEstimateMm)? '后续降雨 ' : '降雨 ';
+  return prefix+(r===3? '高' : r===2? '中' : '低');
+}
 function wxWord(d){
+  if(Number.isFinite(d.progressEstimateMm)){
+    const past=d.progressEstimateMm<0.05? '前序估算无雨'
+      : d.progressEstimateMm<1? '前序估算微雨' : '前序估算有雨';
+    return d.rainy || d.mist ? past+'，后续仍有雨预报' : (d.modal||'天气')+'，'+past;
+  }
   if(d.rainy) return (d.mmMed!=null && d.mmMed>=10)? '持续降雨' : '明显降雨';
   if(d.mist || d.rainLevel==='零星') return '短时小雨';
   return d.modal;
@@ -382,7 +371,7 @@ function renderSimple(view){
       +'<div class="s-ic">'+ico+'</div>'
       +'<div class="s-desc">'+wxWord(d)+'</div>'
       +'<div class="s-temp"><b>'+(d.hi==null?'—':Math.round(d.hi)+'°')+'</b><span>/ '+(d.lo==null?'—':Math.round(d.lo)+'°')+'</span></div>'
-      +'<div class="s-risk r'+r+'">'+riskText(r)+'</div>'
+      +'<div class="s-risk r'+r+'">'+riskText(r,d)+'</div>'
       +'<div class="s-conf"><span class="cf c'+c+'">可信 '+(c===3?'高':c===2?'中':'低')+'</span><small>'+confWhy(d)+'</small></div>'
       +'</div>';
   }).join('');
@@ -453,7 +442,7 @@ function renderCal(view){
       +'<div class="sc"><span class="bar"><i style="width:'+d.score+'%"></i></span><span class="sv">'+d.score+'</span></div>'
       +'<div class="cf">'+(d.lead<=3?'短期':d.lead<=7?'中期':d.lead<=10?'趋势':'低置信')+'·'+d.confText
       +(d.ok?'':('·'+(d.outReason==='阴'?(d.loose? '阴次档':'阴'):(d.outReason==='雨'?'雨':(d.outReason==='数据不足'?'缺':(d.outReason==='仅一家'?'1家':'远'))))))+'</div>'
-      +(d.actualNote? '<div class="anote">'+d.actualNote+'</div>' : (d.mist? '<div class="anote">零星小雨，不算下雨</div>' : ''));
+      +(d.progressNote? '<div class="anote">'+d.progressNote+'</div>' : (d.mist? '<div class="anote">零星小雨，不算下雨</div>' : ''));
     b.addEventListener('click',()=>{
       openPanel(d,b);
       if(typeof fetchRainHours==='function' && d.rainHoursState!=='ready' && d.rainHoursState!=='unavailable'){

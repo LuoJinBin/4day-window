@@ -1,31 +1,15 @@
-function codeToModal(c){ if(c==null) return null; if(c===0||c===1) return '晴'; if(c===2) return '多云'; if(c===3||c===45||c===48) return '阴'; return '雨'; }
-function actualMap(){
-  const A={}; if(!ACTUAL||!ACTUAL.time) return A;
-  ACTUAL.time.forEach((iso,i)=>{ A[iso]={mm:ACTUAL.precipitation_sum[i], hi:ACTUAL.temperature_2m_max[i], lo:ACTUAL.temperature_2m_min[i], code:ACTUAL.weather_code[i]}; });
-  if(typeof ACTUAL.__bornToday==='number'){ const t=chinaIso(); if(A[t]) A[t].born=ACTUAL.__bornToday; }
-  return A;
+function applyProgressEstimate(view){
+  if(!view || !Array.isArray(view.days) || !PROGRESS_ESTIMATE
+    || typeof PROGRESS_ESTIMATE.__completedHoursRainMm!=='number') return;
+  const now=new Date(), today=chinaIso(now), parts=chinaParts(now);
+  if(PROGRESS_ESTIMATE.__completedHoursRainDate!==today) return;
+  const day=view.days.find(d=>d.date===today.slice(5));
+  if(!day) return;
+  Object.assign(day,applyDayProgress(day,{mm:PROGRESS_ESTIMATE.__completedHoursRainMm},
+    {isToday:true,hour:PROGRESS_ESTIMATE.__completedHoursRainHour}));
 }
-function applyActual(view){
-  const A=actualMap(); if(!view||!view.days) return;
-  const today=chinaParts(), y=Number(today.year), m0=Number(today.month), todayIso=chinaIso();
-  let touched=false;
-  view.days.forEach(d=>{
-    const mm=parseInt(d.date.slice(0,2),10);
-    const iso=(mm<m0? y+1 : y)+'-'+d.date;
-    const a=A[iso]; if(!a || iso>todayIso) return;
-    const isToday=iso===todayIso;
-    // 当天只使用已经结束的小时实况；没有小时数据时绝不拿“全天预报总雨量”冒充实况。
-    if(isToday && typeof a.born!=='number') return;
-    const mmUse=isToday? a.born : a.mm;
-    if(mmUse==null) return;
-    const next=applyObservedDay(d,{mm:mmUse,code:a.code,hi:a.hi,lo:a.lo},{isToday,hour:Number(today.hour)});
-    Object.assign(d,next);
-    touched=true;
-  });
-  if(touched) view.windows=buildWindows(view.days);
-}
-async function fetchActual(){
-  const ACT_URL='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
+async function fetchProgressEstimate(){
+  const PROGRESS_URL='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
    +'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum'
    +'&hourly=precipitation'
    +'&timezone=Asia%2FShanghai&past_days=7&forecast_days=1';
@@ -33,7 +17,7 @@ async function fetchActual(){
   for(let a=0;a<3 && !js;a++){
     const ctl=new AbortController(); const to=setTimeout(function(){ctl.abort();},22000);
     try{
-      const r=await fetch(ACT_URL,{cache:'no-store',signal:ctl.signal});
+      const r=await fetch(PROGRESS_URL,{cache:'no-store',signal:ctl.signal});
       if(r.ok) js=await r.json();
     }catch(e){}
     finally{ clearTimeout(to); }
@@ -46,14 +30,14 @@ async function fetchActual(){
   const daily=aggPoints(dl.map(function(x){ return x.daily; }));
   const hl=arr.filter(function(x){ return x.hourly; });
   const hourly=hl.length? aggPoints(hl.map(function(x){ return x.hourly; })) : null;
-  if(hourly) completedHourlyRain(daily,hourly);
+  if(hourly) completedHourlyRainEstimate(daily,hourly);
   return daily;
 }
-async function refreshActual(){
+async function refreshForecastProgressEstimate(){
   try{
-    const d=await fetchActual(); if(d) ACTUAL=d;
-    if(VIEW && ACTUAL){ applyActual(VIEW); render(VIEW); }
-  }catch(err){ console.warn('[actual] refresh failed:',err && err.message? err.message:err); }
+    const d=await fetchProgressEstimate(); if(d) PROGRESS_ESTIMATE=d;
+    if(VIEW && PROGRESS_ESTIMATE){ applyProgressEstimate(VIEW); render(VIEW); }
+  }catch(err){ console.warn('[forecast-progress] refresh failed:',err && err.message? err.message:err); }
 }
 
 function isoOf(d){ return chinaIso(d); }
@@ -264,7 +248,7 @@ async function boot(){
     render(snapshotFromCache(cache.view,{updatedAt:cache.ts,stale:false,ageMinutes:Math.max(0,Math.round((Date.now()-cache.ts)/60000))}));
     setStatus('ok','缓存 '+hm(cache.ts)+' 的结果 · 有效至 '+hm(cache.ts+TTL),'数据：Open-Meteo 六模式');
     btn.disabled=false;
-    refreshActual();
+    refreshForecastProgressEstimate();
 
     return;
   }
@@ -284,7 +268,7 @@ async function boot(){
       render(built || snapshotView());
       setStatus('err','这次没取到新数据（'+(err.message||'网络不通')+'），下面是 '+SNAP_TIME+' 抓的预报','内置');
     }
-  }finally{ btn.disabled=false; refreshActual(); }
+  }finally{ btn.disabled=false; refreshForecastProgressEstimate(); }
 }
 function snapshotFromCache(view, meta={}){
   const days=view.days.map(d=>Object.assign({},d,{recs:d.recs||[],
@@ -302,7 +286,7 @@ if (document.getElementById('sRange')) {
       applyForecastResult(v);
     }catch(err){
       setStatus('err','重算失败（'+(err.message||'网络不通')+'），继续显示屏幕上这一次的结果','离线');
-    }finally{ this.disabled=false; refreshActual(); }
+    }finally{ this.disabled=false; refreshForecastProgressEstimate(); }
   });
 
   document.getElementById('btnEvidence').addEventListener('click',function(){

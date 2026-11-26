@@ -13,7 +13,7 @@ const SRC=[
  ['ERA5 再分析','11 年逐日历史','—','https://open-meteo.com/en/docs/historical-weather-api']
 ];
 
-let ACTUAL=null;
+let PROGRESS_ESTIMATE=null;
 let TREND_VIEW=null;
 let TREND_RESIZE_BOUND=false;
 let RAIN_HOURS_VIEW=null;

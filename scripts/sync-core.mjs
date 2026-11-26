@@ -61,7 +61,7 @@ while (i < app.length) {
 const coreBody = app.slice(0, i);
 
 const EXPORTS = [
-  'median', 'forecastMeta', 'chinaParts', 'chinaIso', 'chinaHour', 'leadOf', 'applyObservedDay', 'completedHourlyRain',
+  'median', 'forecastMeta', 'chinaParts', 'chinaIso', 'chinaHour', 'leadOf', 'applyDayProgress', 'completedHourlyRainEstimate',
   'dayScore', 'metrics', 'compareWindowPreference', 'buildWindows', 'rankTripWindows', 'selectDisplayWindow', 'windowVerdict', 'packDays',
   'riskOf', 'riskText', 'wxWord', 'confTier', 'confWhy',
   'winPen', 'verdictOf',
