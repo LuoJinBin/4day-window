@@ -1,4 +1,5 @@
 import { aggPoints, fromOpenMeteo, MDL } from '../src/core/logic.js';
+import { addDays } from '../public/assets/planner-calendar.js';
 
 const DAILY = [
   'weather_code',
@@ -19,10 +20,9 @@ export function buildForecastUrl(cfg) {
     'longitude=' + lon,
     'daily=' + DAILY.join(','),
     'hourly=weather_code',
-    'timezone=Asia%2FShanghai',
-    'forecast_days=' + cfg.forecastDays,
-    'forecast_hours=168',
-    'past_hours=12',
+    'timezone=' + encodeURIComponent(cfg.timezone || 'Asia/Shanghai'),
+    ...(cfg.startDate ? ['start_date=' + cfg.startDate, 'end_date=' + cfg.endDate] :
+      ['forecast_days=' + cfg.forecastDays, 'forecast_hours=168', 'past_hours=12']),
     'models=' + models
   ].join('&');
   return cfg.forecastBase + '?' + qs;
@@ -39,7 +39,7 @@ function weatherGroup(code) {
   return 'precipitation';
 }
 
-function applyDaylightWeatherCodes(daily, hourly) {
+function applyDaylightWeatherCodes(daily, hourly, cutoff) {
   if (!daily || !Array.isArray(daily.time) || !hourly
     || !Array.isArray(hourly.time)) return 0;
 
@@ -47,7 +47,7 @@ function applyDaylightWeatherCodes(daily, hourly) {
   hourly.time.forEach((stamp, index) => {
     if (typeof stamp !== 'string') return;
     const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):/.exec(stamp);
-    if (!match) return;
+    if (!match || (cutoff && match[1] >= cutoff)) return;
     const hour = Number(match[2]);
     if (hour < 7 || hour > 17) return;
     const indices = indicesByDate.get(match[1]) || [];
@@ -92,15 +92,13 @@ function applyDaylightWeatherCodes(daily, hourly) {
   return applied;
 }
 
-// 返回 { view, rawDaily, fetchedAt }；view 即页面 render() 需要的结构。
-export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
-  const url = buildForecastUrl(cfg);
+export async function requestOpenMeteo(url, { fetchImpl = fetch, timeoutMs = 14_000, attempts = 3 } = {}) {
   let json;
   let lastErr;
-  // 多模式多点请求偶尔 503/超时：重试 3 次（1.5s 间隔），不改变请求参数。
-  for (let attempt = 0; attempt < 3 && !json; attempt += 1) {
+  // Retry transient upstream errors with a short delay and identical parameters.
+  for (let attempt = 0; attempt < attempts && !json; attempt += 1) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), cfg.requestTimeoutMs);
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
       const res = await fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json' } });
       if (!res.ok) {
@@ -120,6 +118,8 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
         const suffix = detail ? ': ' + String(detail).slice(0, 240) : '';
         const retryNote = retryAfter ? ' (Retry-After ' + String(retryAfter).slice(0, 40) + ')' : '';
         const err = new Error('Open-Meteo HTTP ' + res.status + suffix + retryNote);
+        err.status = res.status;
+        err.retryAfter = retryAfter;
         // A 429 is an upstream quota/rate-limit response: retrying immediately only adds load.
         if (res.status === 429 || (res.status >= 400 && res.status < 500 && res.status !== 408)) {
           err.nonRetryable = true;
@@ -130,12 +130,20 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
     } catch (err) {
       lastErr = err;
       if (err && err.nonRetryable) throw err;
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
+      if (attempt < attempts - 1) await new Promise((r) => setTimeout(r, 1500));
     } finally {
       clearTimeout(timer);
     }
   }
   if (!json) throw lastErr || new Error('Open-Meteo 无响应');
+
+  return json;
+}
+
+// Returns the existing daily score and the original local calendar dates.
+export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
+  const url = buildForecastUrl(cfg);
+  const json = await requestOpenMeteo(url, { fetchImpl, timeoutMs: cfg.requestTimeoutMs, attempts: cfg.attempts });
 
   const list = Array.isArray(json)
     ? json.map((x) => x.daily).filter(Boolean)
@@ -153,7 +161,7 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
       || daily.time.some((date, i) => date !== baseDates[i])) {
       throw new Error('Open-Meteo 点位日期不一致（点位 ' + (index + 1) + '）');
     }
-    if (!Array.isArray(daily.time) || daily.time.length < 6) {
+    if (!Array.isArray(daily.time) || daily.time.length < (cfg.minDays || 6)) {
       throw new Error('Open-Meteo 第 ' + (index + 1) + ' 个点位缺少有效日期序列');
     }
     for (let i = 0; i < daily.time.length; i += 1) {
@@ -177,13 +185,13 @@ export async function fetchForecast(cfg, { fetchImpl = fetch } = {}) {
   if (hourlyList.length === cfg.points.length) {
     try {
       const hourly = aggPoints(hourlyList);
-      applyDaylightWeatherCodes(daily, hourly);
+      applyDaylightWeatherCodes(daily, hourly, cfg.today ? addDays(cfg.today, 7) : null);
     } catch {
       // Daily weather_code remains the safe fallback when hourly data is incomplete.
     }
   }
 
-  const view = fromOpenMeteo({ daily });
+  const view = fromOpenMeteo({ daily }, cfg);
   if (!view || !view.days || !view.days.length) throw new Error('数据不足，无法生成日视图');
 
   return { view, rawDaily: daily, fetchedAt: new Date().toISOString(), url };

@@ -1,86 +1,122 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="广州中心城区未来四天晴好出行窗口监测，综合多家天气模式，提供逐日预报与温度降雨趋势。">
-<meta name="theme-color" content="#16636F">
-<title>广州 · 四天晴好窗口监测（阴天可放宽）</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2316636F'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23E3A63B'/%3E%3Cpath d='M2 26h28' stroke='%23F1F4F1' stroke-width='2'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
-<link rel="stylesheet" href="./assets/app.css">
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="查询全球城市逐小时天气，挑选更合适的连续出行日期。">
+  <meta name="theme-color" content="#eff6f4">
+  <title>晴窗 · 天气出行规划</title>
+  <link rel="stylesheet" href="./assets/app.css">
 </head>
-<body>
+<body class="planner">
+  <header class="planner-header">
+    <div class="planner-width">
+      <a class="planner-brand" href="./"><span class="planner-brand-icon" aria-hidden="true">☀</span>晴窗</a>
+      <span>天气出行规划</span>
+    </div>
+  </header>
 
-<header class="masthead">
-  <div class="wrap">
-    <div class="brand">广州 <span>/</span> 四天窗口监测</div>
-    <div class="mast-meta">广州中心城区 · 每天打开自动更新，直接给出发日期</div>
-  </div>
-</header>
-
-
-<section class="simple">
-  <div class="wrap">
-    <p class="s-kicker">广州 · 四天三晚</p>
-    <div class="s-head">
+  <main class="planner-width">
+    <div class="planner-intro">
       <div>
-        <h1 class="s-range" id="sRange">—</h1>
-        <p class="s-sub" id="sSub">—</p>
+        <h1>挑个好天气出发</h1>
+        <p>查指定日期，或找一段天气合适的日子。</p>
       </div>
-      <div class="s-verdict" id="sVerdict"></div>
+      <div class="planner-local">
+        <strong id="localCity">广州</strong>
+        <span id="localDate"></span>
+      </div>
     </div>
-    <p class="s-why" id="sWhy"></p>
-    <div class="s-days" id="sDays"></div>
-    <div class="s-alt" id="sAlt"></div>
-    <div class="s-foot">
-      <span class="s-stamp" id="sUpdated" aria-live="polite">—</span>
-      <button type="button" class="s-btn" id="btnEvidence" aria-expanded="false" aria-controls="evidence">查看数据依据</button>
-    </div>
-  </div>
-</section>
 
-<div class="evidence" id="evidence" hidden>
-  <div class="wrap evidence-actions">
-    <div class="evidence-status">
-      <span class="dot" id="dot"></span>
-      <span id="status" role="status" aria-live="polite" aria-atomic="true">正在读取…</span>
-    </div>
-    <button id="btnRecalc" type="button">立即重算</button>
-  </div>
-  <div class="wrap evidence-sections">
-    <section class="sheet" id="evidence-daily">
-      <div class="rail">
-        <h2>逐日预报</h2>
-      </div>
-      <div class="body">
-        <div class="calwrap">
-          <div class="calinner">
-            <div class="cal" id="cal"></div>
+    <section class="planner-card planner-controls" aria-label="出行条件">
+      <form id="plannerForm" novalidate>
+        <div class="planner-city">
+          <label for="cityInput">目的地</label>
+          <div class="planner-search">
+            <span class="search-icon" aria-hidden="true"></span>
+            <input id="cityInput" name="city" type="search" placeholder="搜索城市，如北京、东京或 Paris" autocomplete="off"
+              aria-controls="cityResults" aria-describedby="cityStatus">
+            <div id="cityResults" class="planner-search-results" hidden></div>
           </div>
+          <p id="cityStatus" class="planner-help" role="status"></p>
+          <div id="cityShortcuts" class="planner-shortcuts" aria-label="常用及最近使用城市"></div>
         </div>
-        <div class="panel" id="panel" role="region" aria-label="所选日期天气详情" aria-live="polite" hidden></div>
-      </div>
+
+        <div class="planner-options">
+          <fieldset class="planner-mode">
+            <legend>查询方式</legend>
+            <div class="planner-segments">
+              <label><input type="radio" name="mode" value="auto" checked><span>自动找好天气</span></label>
+              <label><input type="radio" name="mode" value="manual"><span>自己选日期</span></label>
+            </div>
+          </fieldset>
+          <div class="planner-duration">
+            <label for="tripDays">出行天数</label>
+            <select id="tripDays">
+              <option value="1">1 天</option><option value="2">2 天</option><option value="3">3 天</option>
+              <option value="4" selected>4 天</option><option value="5">5 天</option>
+              <option value="6">6 天</option><option value="7">7 天</option>
+            </select>
+          </div>
+          <div class="planner-date-fields">
+            <label><span id="startLabel">查找起日</span><input id="startDate" type="date" required></label>
+            <label><span id="endLabel">查找截止日</span><input id="endDate" type="date" required></label>
+            <p id="dateCoverage" class="planner-help"></p>
+          </div>
+          <div class="planner-period-field">
+            <label for="tripPeriod">每天出行时段</label>
+            <select id="tripPeriod">
+              <option value="all">全天</option><option value="morning">上午 06:00–12:00</option>
+              <option value="afternoon">下午 12:00–18:00</option><option value="evening">晚上 18:00–24:00</option>
+              <option value="custom">自定义时间</option>
+            </select>
+          </div>
+          <div id="customTime" class="planner-custom" hidden>
+            <label>开始时间<input id="startTime" type="time" value="08:00"></label>
+            <label>结束时间<input id="endTime" type="time" value="18:00"></label>
+            <p id="timeHelp" class="planner-help">按目的地当地时间，每天分析同一时段。</p>
+          </div>
+          <div class="planner-preference">
+            <label for="weekend">周末偏好</label>
+            <select id="weekend">
+              <option value="workdays">优先工作日</option>
+              <option value="avoid">尽量避开周末</option>
+              <option value="any">不限制周末</option>
+            </select>
+          </div>
+          <button type="submit" id="queryWeather" class="planner-submit">查询天气</button>
+        </div>
+      </form>
     </section>
-    <section class="sheet" id="evidence-trend">
-      <div class="rail">
-        <h2>温度与降雨趋势</h2>
-      </div>
-      <div class="body">
-        <div class="chart" id="trendchart"></div>
-      </div>
+
+    <p id="status" class="planner-status" role="status" aria-live="polite" aria-atomic="true">正在读取当地预报…</p>
+    <section id="plannerResult" aria-label="查询结果" hidden>
+      <article id="bestWindow" class="planner-card planner-result"></article>
+      <section class="planner-card planner-comparison" aria-labelledby="comparisonTitle">
+        <h2 id="comparisonTitle">日期对比</h2>
+        <p class="planner-help planner-hour-hint">点选日期查看逐小时天气</p>
+        <div id="resultDays" class="planner-days"></div>
+        <div id="hourDetails" class="planner-hour-details" hidden></div>
+        <div id="alternatives" class="planner-alternatives" hidden></div>
+      </section>
+      <details id="plannerEvidence" class="planner-card planner-evidence">
+        <summary>查看数据依据</summary>
+        <div class="planner-evidence-body">
+          <p id="dataNote"></p>
+          <h2>温度与降雨趋势</h2>
+          <div class="chart" id="trendchart"></div>
+          <p>天气预报由 <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> 提供。周末偏好仅用于日期排序。</p>
+          <p id="guangzhouEvidence" hidden><a href="./guangzhou.html">广州四天晴好窗口与原始预报视图</a></p>
+        </div>
+      </details>
     </section>
-  </div>
-</div>
+  </main>
 
-<script src="./assets/snapshot-data.js"></script>
-
-<script>window.GZ_API_BASE = '/api/forecast';</script>
-<script src="./assets/app-core.js"></script>
-<script src="./assets/app-backtest.js"></script>
-<script src="./assets/app-charts.js"></script>
-<script src="./assets/app-runtime.js"></script>
-
+  <script>window.GZ_API_BASE = '/api/forecast';</script>
+  <script src="./assets/snapshot-data.js"></script>
+  <script src="./assets/app-core.js"></script>
+  <script src="./assets/app-charts.js"></script>
+  <script src="./assets/app-runtime.js"></script>
+  <script type="module" src="./assets/planner.js"></script>
 </body>
 </html>

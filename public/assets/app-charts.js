@@ -13,7 +13,7 @@ const SRC=[
  ['ERA5 再分析','11 年逐日历史','—','https://open-meteo.com/en/docs/historical-weather-api']
 ];
 
-let ACTUAL=null;
+let PROGRESS_ESTIMATE=null;
 let TREND_VIEW=null;
 let TREND_RESIZE_BOUND=false;
 let RAIN_HOURS_VIEW=null;
@@ -61,8 +61,10 @@ function renderTrend(view){
   const selected=typeof selectDisplayWindow==='function'?selectDisplayWindow(view.windows||[]):null;
   const highlight=selected && (selected.tier==='strict'||selected.tier==='loose')?selected.window:null;
   const parts=[];
-  parts.push('<svg class="trend-svg" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="未来逐日最高温、最低温、ECMWF最高温和降雨概率趋势">');
-  parts.push('<title>未来逐日温度与降雨概率趋势</title><desc>柱形表示最大降雨概率，三条线分别表示综合最高温、综合最低温和 ECMWF 最高温。</desc>');
+  parts.push('<svg class="trend-svg" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="未来逐日最高温、最低温'
+    +(view.planner?'':'、ECMWF最高温')+'和降雨概率趋势">');
+  parts.push('<title>未来逐日温度与降雨概率趋势</title><desc>柱形表示最大降雨概率，线条表示综合最高温、综合最低温'
+    +(view.planner?'':'和 ECMWF 最高温')+'。</desc>');
   if(highlight){
     const si=days.findIndex(d=>d.date===highlight.start),ei=days.findIndex(d=>d.date===highlight.end);
     if(si>=0&&ei>=si) parts.push('<rect x="'+(left+si*step).toFixed(2)+'" y="'+top+'" width="'+((ei-si+1)*step).toFixed(2)+'" height="'+plotHeight+'" fill="rgba(22,99,111,.07)"/>');
@@ -120,7 +122,7 @@ function renderTrend(view){
   el.innerHTML='<div class="trend-legend" aria-hidden="true">'
     +'<span><i class="trend-key trend-key-max"></i>最高温</span>'
     +'<span><i class="trend-key trend-key-min"></i>最低温</span>'
-    +'<span><i class="trend-key trend-key-ecmwf"></i>ECMWF 最高</span>'
+    +(!view.planner||ecPath? '<span><i class="trend-key trend-key-ecmwf"></i>ECMWF 最高</span>' : '')
     +'<span><i class="trend-key trend-key-rain"></i>降雨概率</span>'
     +'</div>'+parts.join('');
 }

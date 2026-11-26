@@ -6,6 +6,8 @@ import config, { ROOT } from './config.js';
 import { createForecastService } from './forecast-service.js';
 import { buildWindows } from '../src/core/logic.js';
 import { ageMinutes, isFresh } from './cache.js';
+import { createPlannerService } from './planner-service.js';
+import { createForecastHandler, createGeocodingHandler } from './vercel-handlers.js';
 import { startScheduler } from './scheduler.js';
 
 const PUBLIC = path.join(ROOT, 'public');
@@ -105,6 +107,9 @@ function serveStatic(req, res, url) {
 
 export function createApp(cfg = config, deps = {}) {
   const service = deps.service || createForecastService(cfg, deps);
+  const planner = createPlannerService(cfg, deps);
+  const plannerForecast = createForecastHandler(service, { planner });
+  const geocoding = createGeocodingHandler(planner);
   const server = http.createServer(async (req, res) => {
     let url;
     try {
@@ -130,7 +135,11 @@ export function createApp(cfg = config, deps = {}) {
         });
       }
 
+      if (p === '/api/geocoding') return await geocoding(req, res);
       if (p === '/api/forecast') {
+        if (url.searchParams.has('latitude') || url.searchParams.has('longitude') || url.searchParams.has('timezone')) {
+          return await plannerForecast(req, res);
+        }
         const allowForce = process.env.ALLOW_FORCE_REFRESH === 'true';
         const force = allowForce && url.searchParams.get('force') === '1';
         const r = await service.get({ force });

@@ -1,16 +1,25 @@
-# 广州 · 四天窗口监测
+# 晴窗 · 天气出行规划
 
-判断广州中心城区**未来哪连续四天最适合出行**（4 天 3 晚）。首屏只回答四件事：什么时候出发、四天什么天气、现在能不能安排、要不要继续等；所有模型明细、回测与公式收在「查看数据依据」里，默认折叠。
+首页支持全球城市搜索、自动寻找或手动评估连续 1–7 天的日期，以及固定或自定义的当地出行时段。默认使用广州、连续 4 天和工作日优先。广州原有四区预报视图仍可从「查看数据依据」进入，也可直接访问 `/guangzhou.html`。
 
 线上页面：<https://guangzhou-4day-window.vercel.app/>
 
 ---
 
-## 1. 这个仓库是什么
+## 出行规划数据
+
+- `GET /api/geocoding?q=城市名` 返回城市、行政区、国家、经纬度和 IANA 时区。搜索结果缓存 24 小时。
+- `GET /api/forecast?latitude=39.9075&longitude=116.39723&timezone=Asia%2FShanghai` 返回城市逐日预报。可传 `start` 和 `end` 限定当地日期范围，也可用 `kind=hourly` 取得以 UTC 时间戳表示的逐小时数据。没有坐标参数时仍返回原广州接口格式。
+- 规划功能使用原有六模式权重、降雨判定与阴天放宽门槛。广州按原四个城区参考点合成，其余城市按地理编码点分析。逐小时预测按所选时段独立汇总，并考虑体感、强风和雷雪。返回范围随模型的真实覆盖缩短，超出覆盖的时段将显示预报不足。
+- 预报缓存按数据类型、坐标、时区、目的地当天和请求范围隔离。单次刷新失败时，界面会标明同一请求旧数据的原更新时间。浏览器本地保存最近城市和出行偏好。
+- 工作日优先沿用原有天气相近时优先较少周末的排序。尽量避开周末在相同天气等级内先比周末天数。不限制周末按天气评分排序。
+- 使用 `npm start` 或 Vercel 运行首页及同源 API。仅托管静态文件时，可使用保留的广州原始页面。
+
+## 1. 原广州四天窗口实现
 
 原始交付物是一个**单文件 HTML**（CSS/JS 全内联、无后端）。本仓库在不改动天气评分、模型权重、降雨阈值与回测口径的前提下，做了三件事：
 
-1. 把页面拆成 `public/index.html` + `app.css` + 四个按顺序加载的 JS 模块（core / backtest 数据 / charts / runtime，原单文件 JS 只做切分、未改逻辑）+ 内置快照数据；
+1. 把页面拆成 `public/guangzhou.html` + `app.css` + 四个按顺序加载的 JS 模块（core / backtest 数据 / charts / runtime，原单文件 JS 只做切分、未改逻辑）+ 内置快照数据；
 2. 从同一份模块自动截取出 Node 可导入的纯逻辑模块 `src/core/logic.js`（**不是重写**，见 `scripts/sync-core.mjs`）；
 3. 增加一个**可选**的 Node 服务（缓存、定时刷新、JSON API、静态托管）。没有它，页面仍可像原来一样直接访问 Open-Meteo 独立运行。
 
@@ -27,7 +36,7 @@
 │       ├── app-core.js         # 常量、评分、四天窗口、风险与三档结论
 │       ├── app-backtest.js     # 回测数据常量 BT / BT_ORG / BT_LEADS（纯数据，无逻辑）
 │       ├── app-charts.js       # 原生 SVG 趋势图、表格滚动、点击日期后才请求逐小时降雨详情
-│       ├── app-runtime.js      # 取数、缓存、实况回填、boot 与事件绑定
+│       ├── app-runtime.js      # 取数、缓存、过去时段模型回算提示、boot 与事件绑定
 │       └── snapshot-data.js    # 2026-11-14 内置离线快照
 ├── src/core/logic.js           # 自动生成（git 忽略）：页面逻辑的 Node 版本；npm install/test/start 会重建
 ├── server/                     # 可选后端
@@ -67,13 +76,13 @@ cp .env.example .env  # 可选；不配也能跑
 npm start             # http://127.0.0.1:8787
 ```
 
-- 只想要页面：把 `public/` 整个目录丢到任意静态托管即可。此时 `window.GZ_API_BASE` 为空，页面直连 Open-Meteo，并用浏览器 `localStorage`（键 `gz_wx_v9`，TTL 6 小时）缓存。
-- 想让页面走服务端缓存：用 `npm start`。服务端会把 `index.html` 里的 `window.GZ_API_BASE = ''` 替换为 `/api/forecast`，页面优先请求同源接口，失败自动回退直连。所有日历日期、更新时间和实况截止时刻均固定使用 `Asia/Shanghai`，不受访问者电脑时区影响。
+- 仅静态托管时，`guangzhou.html` 在同源预报接口不可用时回退至 Open-Meteo，并使用 TTL 为 6 小时的浏览器缓存。
+- 运行 `npm start` 后，两个页面都可请求同源预报接口。原广州页面的日期、更新时间和过去时段模型回算截止时刻使用 `Asia/Shanghai`。
 
 测试与检查：
 
 ```bash
-npm test              # 覆盖窗口判定、时区/实况、点位一致性、缓存/调度、接口与静态资源
+npm test              # 覆盖窗口判定、时区/过去时段估算、点位一致性、缓存/调度、接口与静态资源
 npm run check:page    # 四个 JS 模块语法 + 首页关键结构
 ```
 
@@ -98,7 +107,7 @@ renderSimple()  首屏严格档优先，其次阴天放宽，最后才显示远�
 
 - 预报接口（页面与服务端同一条，参数逐字一致）：
   `https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=Asia%2FShanghai&forecast_days=16&models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless,cma_grapes_global,icon_seamless,meteofrance_seamless`
-- 实况回填：同接口加 `hourly=precipitation&past_days=7&forecast_days=1`，固定按广州时区 06:00 至当前已结束小时累计；当天累计达到 1.0mm 才确认已经下雨，未达到时保留当天剩余时段预报。
+- 过去时段估算：同接口加 `hourly=precipitation&past_days=7&forecast_days=1`，固定按广州时区 06:00 至当前已结束小时累计。Forecast API 的 `past_days` 是归档模型预报，不是气象站实测；页面只把累计值作为前序时段估算提示，全天天气和后续降雨风险仍按完整预报判断，不会把模型回算冒充实况。
 - 历史再分析：`https://archive-api.open-meteo.com/v1/archive`（ERA5，UTC 日，广州 23.13N/113.26E，2015-01-01—2025-12-31）。
 - 回测：`https://single-runs-api.open-meteo.com/v1/forecast`，**必须** `timezone=UTC`、`run=<YYYY-MM-DD>T00:00`；`previous-runs-api` 只有最近 8 天带真实 pop。
 

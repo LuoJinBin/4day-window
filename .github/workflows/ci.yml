@@ -21,3 +21,4 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run check:page
+      - run: npm run pages:build
