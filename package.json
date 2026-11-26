@@ -16,6 +16,7 @@
     "core:sync": "node scripts/sync-core.mjs",
     "check:page": "node scripts/check-page.mjs",
     "pages:build": "node scripts/build-pages.mjs",
+    "pages:fetch-forecast": "node scripts/fetch-pages-forecast.mjs",
     "prestart": "node scripts/sync-core.mjs",
     "pretest": "node scripts/sync-core.mjs",
     "predata:export": "node scripts/sync-core.mjs",

@@ -15,6 +15,9 @@ const css = read('public/assets/app.css');
 const charts = read('public/assets/app-charts.js');
 const runtime = read('public/assets/app-runtime.js');
 const core = read('public/assets/app-core.js');
+const pagesBuilder = read('scripts/build-pages.mjs');
+const pagesWorkflow = read('.github/workflows/pages.yml');
+const pagesFetcher = read('scripts/fetch-pages-forecast.mjs');
 
 // 1) app.js 语法
 for (const f of [...JSPARTS, 'planner.js', 'planner-calendar.js', 'planner-model.js']) {
@@ -70,6 +73,18 @@ if (core.includes("getElementById('band1')") || core.includes("getElementById('b
   fail.push('日历仍引用已删除的提示或窗口标记');
 }
 if (!runtime.includes('renderTrend(view)') || !runtime.includes('renderCal(view)')) fail.push('逐日预报或趋势图未接入渲染流程');
+if (!runtime.includes('fetchStaticForecastView') || !runtime.includes('live-forecast.json')) {
+  fail.push('广州静态页面缺少同源自动同步预报读取逻辑');
+}
+if (!pagesBuilder.includes('live-forecast.json') || !pagesWorkflow.includes('npm run pages:fetch-forecast')) {
+  fail.push('GitHub Pages 构建未打包自动同步预报');
+}
+if (!pagesWorkflow.includes('schedule:') || !pagesWorkflow.includes("cron: '0 */6 * * *'")) {
+  fail.push('GitHub Pages 未配置每六小时自动同步');
+}
+if (!pagesFetcher.includes('api.open-meteo.com/v1/forecast') || !pagesFetcher.includes('validateForecast')) {
+  fail.push('缺少 Open-Meteo 静态预报采集与校验脚本');
+}
 if (/<script[^>]+src=["']https?:\/\//i.test(html) || /echarts/i.test(html + charts)) fail.push('页面不应依赖外部图表脚本');
 if (!charts.includes('function renderTrend') || !charts.includes('<svg class="trend-svg"')) fail.push('趋势图必须使用原生 SVG');
 if (/function (renderRank|renderTripUI|renderProb|renderAccV2|renderMatrix|renderAlts|renderPlan|renderSrc)\(/.test(charts)) fail.push('已移除的旧图表/历史模块仍残留');

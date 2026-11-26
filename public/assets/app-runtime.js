@@ -9,19 +9,35 @@ function applyProgressEstimate(view){
     {isToday:true,hour:PROGRESS_ESTIMATE.__completedHoursRainHour}));
 }
 async function fetchProgressEstimate(){
+  let payload=null;
+  try{ payload=await loadStaticForecastPayload(); }catch(e){}
+  if(payload){
+    if(!payload.progress) return null;
+    const arr=Array.isArray(payload.progress)?payload.progress:[payload.progress];
+    const dl=arr.filter(function(x){ return x && x.daily; });
+    const hl=arr.filter(function(x){ return x && x.hourly; });
+    if(!dl.length) return null;
+    const daily=aggPoints(dl.map(function(x){ return x.daily; }));
+    const hourly=hl.length?aggPoints(hl.map(function(x){ return x.hourly; })) : null;
+    if(hourly) completedHourlyRainEstimate(daily,hourly,
+      new Date(payload.progressFetchedAt || payload.fetchedAt || Date.now()));
+    return daily;
+  }
+
+  // Development fallback when the static snapshot file is not available.
   const PROGRESS_URL='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
    +'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum'
    +'&hourly=precipitation'
    +'&timezone=Asia%2FShanghai&past_days=7&forecast_days=1';
   let js=null;
-  for(let a=0;a<3 && !js;a++){
-    const ctl=new AbortController(); const to=setTimeout(function(){ctl.abort();},22000);
+  for(let a=0;a<2 && !js;a++){
+    const ctl=new AbortController(); const to=setTimeout(function(){ctl.abort();},12000);
     try{
       const r=await fetch(PROGRESS_URL,{cache:'no-store',signal:ctl.signal});
       if(r.ok) js=await r.json();
     }catch(e){}
     finally{ clearTimeout(to); }
-    if(!js) await new Promise(function(r){ setTimeout(r, 1200*(a+1)); });
+    if(!js) await new Promise(function(r){ setTimeout(r,800*(a+1)); });
   }
   if(!js) return null;
   const arr=Array.isArray(js)? js : [js];
@@ -164,16 +180,61 @@ function aggPoints(list){
   });
   return out;
 }
+let LIVE_FETCH_ERROR=null;
+let STATIC_PAYLOAD_CACHE=null, STATIC_PAYLOAD_CACHE_AT=0;
+async function loadStaticForecastPayload(force=false){
+  if(!force && STATIC_PAYLOAD_CACHE && Date.now()-STATIC_PAYLOAD_CACHE_AT<30000) return STATIC_PAYLOAD_CACHE;
+  const base=(typeof document!=='undefined' && document.baseURI)?document.baseURI:window.location.href;
+  const url=new URL('./assets/live-forecast.json',base);
+  url.searchParams.set('_',String(Date.now()));
+  const ctl=new AbortController(); const to=setTimeout(function(){ctl.abort();},12000);
+  try{
+    const r=await fetch(url.toString(),{cache:'no-store',signal:ctl.signal});
+    if(!r.ok) throw new Error('自动同步数据 HTTP '+r.status);
+    const payload=await r.json();
+    if(!payload || payload.schemaVersion!==1 || !Array.isArray(payload.forecast)){
+      throw new Error('自动同步数据格式不正确');
+    }
+    STATIC_PAYLOAD_CACHE=payload; STATIC_PAYLOAD_CACHE_AT=Date.now();
+    return payload;
+  }finally{ clearTimeout(to); }
+}
+async function fetchStaticForecastView(force=false){
+  const payload=await loadStaticForecastPayload(force);
+  const points=Array.isArray(payload.forecast)?payload.forecast:[payload.forecast];
+  const dailyList=points.map(function(x){ return x && x.daily; }).filter(Boolean);
+  if(!dailyList.length) throw new Error('自动同步数据缺少逐日预报');
+  const daily=aggPoints(dailyList);
+  const view=fromOpenMeteo({daily:daily});
+  if(!view) throw new Error('自动同步数据不足');
+  const ts=Date.parse(payload.fetchedAt);
+  const age=Number.isFinite(ts)?Math.max(0,Math.round((Date.now()-ts)/60000)):null;
+  view.updatedAt=Number.isFinite(ts)?ts:null;
+  view.ageMinutes=age;
+  view.stale=Boolean(payload.lastError) || !Number.isFinite(ts) || Date.now()-ts>12*60*60*1000;
+  view.source='scheduled-static';
+  view.lastError=payload.lastError || null;
+  return view;
+}
 async function getDaily(url,ms){
   const ctl=new AbortController(); const to=setTimeout(function(){ctl.abort();},ms);
   try{
     const r=await fetch(url,{cache:'no-store',signal:ctl.signal});
-    if(!r.ok) return null;
+    if(!r.ok){
+      let detail='';
+      try{ const body=await r.json(); detail=body && (body.reason || body.message) || ''; }catch(e){}
+      LIVE_FETCH_ERROR='HTTP '+r.status+(detail?': '+String(detail).slice(0,100):'');
+      return null;
+    }
     const j=await r.json();
     const arr=Array.isArray(j)? j.map(function(x){return x.daily;}).filter(Boolean) : (j && j.daily? [j.daily] : []);
-    return arr.length? aggPoints(arr) : null;
-  }catch(e){ return null; }
-  finally{ clearTimeout(to); }
+    if(!arr.length){ LIVE_FETCH_ERROR='接口没有返回逐日预报'; return null; }
+    try{ return aggPoints(arr); }
+    catch(e){ LIVE_FETCH_ERROR='返回数据格式异常：'+(e && e.message?e.message:'日期不一致'); return null; }
+  }catch(e){
+    LIVE_FETCH_ERROR=e && e.name==='AbortError'?'请求超时':'浏览器无法连接 Open-Meteo（网络或跨域限制）';
+    return null;
+  }finally{ clearTimeout(to); }
 }
 function mergeDaily(list){
   const out={time:list[0].time};
@@ -181,8 +242,14 @@ function mergeDaily(list){
   return {daily:out};
 }
 const LIVE_URL=API_BASE+'&models='+Object.keys(MDL).join(',');
-async function fetchLive(){
-  // 优先使用服务端缓存，但保留其真实更新时间；过期时再尝试浏览器直连。
+async function fetchLive(options={}){
+  let staticFallback=options.staticFallback || null;
+  if(!staticFallback){
+    try{ staticFallback=await fetchStaticForecastView(options.forceDirect===true); }catch(e){}
+  }
+  if(staticFallback && !options.forceDirect && !staticFallback.stale) return staticFallback;
+
+  // 优先使用同源服务端接口（本地开发/Node 部署）；Pages 静态站点没有此接口。
   let staleServer=null;
   if(typeof window!=='undefined' && window.GZ_API_BASE){
     try{
@@ -200,15 +267,24 @@ async function fetchLive(){
     }catch(e){}
   }
   let d=null;
-  for(let a=0;a<2 && !d;a++){
-    d=await getDaily(LIVE_URL,14000);
-    if(!d) await new Promise(function(r){ setTimeout(r,1500); });
+  const attempts=options.forceDirect?2:1;
+  LIVE_FETCH_ERROR=null;
+  for(let a=0;a<attempts && !d;a++){
+    d=await getDaily(LIVE_URL,10000);
+    if(!d && a+1<attempts) await new Promise(function(r){ setTimeout(r,1000); });
   }
   if(!d && staleServer) return staleServer;
-  if(!d) throw new Error('数据源没响应');
+  if(!d && staticFallback){
+    return Object.assign({},staticFallback,{
+      stale:true,
+      source:'scheduled-static',
+      lastError:LIVE_FETCH_ERROR || '实时数据源没响应'
+    });
+  }
+  if(!d) throw new Error(LIVE_FETCH_ERROR || '数据源没响应');
   const v=fromOpenMeteo({daily:d});
-  if(!v) {
-    if(staleServer) return staleServer;
+  if(!v){
+    if(staticFallback) return Object.assign({},staticFallback,{stale:true,source:'scheduled-static',lastError:'实时数据不足'});
     throw new Error('数据不足');
   }
   v.updatedAt=Date.now();
@@ -225,43 +301,63 @@ function applyForecastResult(v){
   render(v);
   if(v && v.stale){
     const age=Number.isFinite(v.ageMinutes)? Math.round(v.ageMinutes) : null;
-    setStatus('warn','实时预报暂不可用，显示服务端旧缓存 · '+(age==null?'更新时间未知':age+' 分钟前更新'),'旧缓存');
+    const label=v.source==='scheduled-static'?'实时重算未成功，显示最近自动同步数据':'实时预报暂不可用，显示服务端旧缓存';
+    const detail=v.lastError?' · '+String(v.lastError).slice(0,90):'';
+    setStatus('warn',label+' · '+(age==null?'更新时间未知':age+' 分钟前同步')+detail,
+      v.source==='scheduled-static'?'自动同步':'旧缓存');
     return;
   }
   const stamp=ts==null? now : ts;
   saveCache({days:v.days,windows:v.windows},stamp);
   const age=Math.max(0,Math.round((now-stamp)/60000));
-  const label=age<=1? '刚刚重算 · '+hm(stamp) : '数据更新于 '+hm(stamp)+' · '+age+' 分钟前';
-  setStatus('ok',label+' · 缓存有效期按原更新时间计算','数据：ECMWF / UKMO / CMA 等六家');
+  const label=v.source==='scheduled-static'
+    ? '自动同步于 '+hm(stamp)+' · '+age+' 分钟前'
+    : age<=1? '刚刚重算 · '+hm(stamp) : '数据更新于 '+hm(stamp)+' · '+age+' 分钟前';
+  setStatus('ok',label+' · 缓存有效期按原更新时间计算',
+    v.source==='scheduled-static'?'Open-Meteo 自动同步':'数据：ECMWF / UKMO / CMA 等六家');
 }
 
 async function boot(){
   const btn=document.getElementById('btnRecalc');
-  // 先给出内置的今日预报，网络慢也不至于空白；取到新数据再替换
+  // 先给出内置快照，避免页面空白；随后优先读取 Actions 自动同步的同源预报。
   const built=fromOpenMeteo({daily:SNAP_RAW});
   setUpdated('内置 '+SNAP_TIME);
   render(built || snapshotView());
-  setStatus('warn','正在取新预报，先看着 '+SNAP_TIME+' 这份…','内置');
+  setStatus('warn','正在读取最近一次自动同步的预报…','自动同步');
+
   const cache=loadCache();
-  if(cache && Date.now()-cache.ts < TTL){
+  let scheduled=null;
+  try{ scheduled=await fetchStaticForecastView(true); }catch(e){}
+  const cacheFresh=cache && Date.now()-cache.ts<TTL;
+  if(cacheFresh && (!scheduled || cache.ts>=scheduled.updatedAt)){
     setUpdated(cache.ts);
-    render(snapshotFromCache(cache.view,{updatedAt:cache.ts,stale:false,ageMinutes:Math.max(0,Math.round((Date.now()-cache.ts)/60000))}));
+    render(snapshotFromCache(cache.view,{updatedAt:cache.ts,stale:false,
+      ageMinutes:Math.max(0,Math.round((Date.now()-cache.ts)/60000))}));
     setStatus('ok','缓存 '+hm(cache.ts)+' 的结果 · 有效至 '+hm(cache.ts+TTL),'数据：Open-Meteo 六模式');
     btn.disabled=false;
     refreshForecastProgressEstimate();
-
     return;
   }
+  if(scheduled && !scheduled.stale){
+    applyForecastResult(scheduled);
+    btn.disabled=false;
+    refreshForecastProgressEstimate();
+    return;
+  }
+
   btn.disabled=true;
-  setStatus('warn','正在取六家模式的最新预报，先看着上面这份…','首次加载');
+  setStatus('warn','正在尝试获取最新预报；实时接口不可用时会保留最近同步结果…','更新中');
   try{
-    const v=await fetchLive();
+    const v=await fetchLive({staticFallback:scheduled});
     applyForecastResult(v);
   }catch(err){
     const stale=loadCache();
-    if(stale && Date.now()-stale.ts < 2*24*3600*1000){
+    if(scheduled){
+      applyForecastResult(scheduled);
+    }else if(stale && Date.now()-stale.ts < 2*24*3600*1000){
       setUpdated(stale.ts);
-      render(snapshotFromCache(stale.view,{updatedAt:stale.ts,stale:true,ageMinutes:Math.max(0,Math.round((Date.now()-stale.ts)/60000))}));
+      render(snapshotFromCache(stale.view,{updatedAt:stale.ts,stale:true,
+        ageMinutes:Math.max(0,Math.round((Date.now()-stale.ts)/60000))}));
       setStatus('err','这次没取到新数据（'+(err.message||'网络不通')+'），先看 '+hm(stale.ts)+' 那次的结果','旧数据');
     }else{
       setUpdated('内置 '+SNAP_TIME);
@@ -282,7 +378,7 @@ if (document.getElementById('sRange')) {
   document.getElementById('btnRecalc').addEventListener('click',async function(){
     this.disabled=true; setStatus('warn','正在重算…');
     try{
-      const v=await fetchLive();
+      const v=await fetchLive({forceDirect:true});
       applyForecastResult(v);
     }catch(err){
       setStatus('err','重算失败（'+(err.message||'网络不通')+'），继续显示屏幕上这一次的结果','离线');

@@ -3,6 +3,8 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -34,6 +36,8 @@ jobs:
         run: npm test
       - name: Check source page
         run: npm run check:page
+      - name: Fetch latest forecast for static hosting
+        run: npm run pages:fetch-forecast
       - name: Build public static site
         run: npm run pages:build
       - name: Configure Pages

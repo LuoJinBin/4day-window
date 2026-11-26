@@ -15,6 +15,7 @@ const ASSETS = [
   'app-charts.js',
   'app-runtime.js'
 ];
+const OPTIONAL_ASSETS = ['live-forecast.json'];
 
 async function build() {
   let html = await fs.readFile(path.join(PUBLIC, 'guangzhou.html'), 'utf8');
@@ -42,6 +43,23 @@ async function build() {
     const stat = await fs.stat(source);
     if (!stat.isFile()) throw new Error('缺少网站资源：' + source);
     await fs.copyFile(source, target);
+  }
+  for (const name of OPTIONAL_ASSETS) {
+    const source = path.join(PUBLIC, 'assets', name);
+    try {
+      const payload = JSON.parse(await fs.readFile(source, 'utf8'));
+      if (name === 'live-forecast.json' &&
+        (payload.schemaVersion !== 1 || !Array.isArray(payload.forecast))) {
+        throw new Error('静态预报快照格式不正确');
+      }
+      await fs.copyFile(source, path.join(OUTPUT, 'assets', name));
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        console.warn('未找到可选资源 ' + name + '；当前构建不包含自动同步预报');
+      } else {
+        throw error;
+      }
+    }
   }
 
   const publishedHtml = await fs.readFile(path.join(OUTPUT, 'index.html'), 'utf8');
