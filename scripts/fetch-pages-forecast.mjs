@@ -1,6 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = path.join(ROOT, 'public/assets/live-forecast.json');
@@ -35,35 +39,60 @@ function makeUrl({ progress = false } = {}) {
   return url.toString();
 }
 
+// Open-Meteo 的 US-West 节点曾出现 TLS/连接间歇性故障；默认 DNS 失败时，
+ // 依次尝试同一主机的其他已观测节点。URL 主机名不变，因此仍校验正确的 TLS 证书。
+const OPEN_METEO_FALLBACK_IPS = ['167.114.211.86', '157.90.83.168'];
+
 async function requestJson(url, timeoutMs = 25000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      cache: 'no-store',
-      headers: { accept: 'application/json' },
-      signal: controller.signal
-    });
-    const body = await response.text();
-    let data;
+  const target = new URL(url);
+  const candidates = target.hostname === 'api.open-meteo.com'
+    ? [null, ...OPEN_METEO_FALLBACK_IPS]
+    : [null];
+  const failures = [];
+
+  for (const ip of candidates) {
+    const args = [
+      '--ipv4', '--silent', '--show-error', '--location',
+      '--connect-timeout', '4',
+      '--max-time', String(Math.max(8, Math.min(10, Math.floor(timeoutMs / 1000)))),
+      '--header', 'accept: application/json',
+      '--write-out', '\\n__HTTP_STATUS__:%{http_code}'
+    ];
+    if (ip) args.push('--resolve', target.hostname + ':443:' + ip);
+    args.push(url);
+
     try {
-      data = JSON.parse(body);
-    } catch {
-      throw new Error('HTTP ' + response.status + '：数据源没有返回 JSON');
+      const result = await execFileAsync('curl', args, {
+        encoding: 'utf8',
+        maxBuffer: 8 * 1024 * 1024,
+        timeout: timeoutMs + 3000
+      });
+      const marker = '\\n__HTTP_STATUS__:';
+      const index = result.stdout.lastIndexOf(marker);
+      if (index < 0) throw new Error('响应缺少 HTTP 状态码');
+      const body = result.stdout.slice(0, index);
+      const status = Number(result.stdout.slice(index + marker.length).trim());
+      let data;
+      try {
+        data = JSON.parse(body);
+      } catch {
+        throw new Error('HTTP ' + status + '：数据源没有返回 JSON');
+      }
+      if (status < 200 || status >= 300 || data?.error) {
+        throw new Error('HTTP ' + status + '：' + String(data?.reason || body).slice(0, 220));
+      }
+      if (ip) console.warn('Open-Meteo 默认节点不可用，已切换备用节点 ' + ip);
+      return data;
+    } catch (error) {
+      const detail = error?.stderr || error?.message || String(error);
+      failures.push((ip || '默认 DNS') + '：' + String(detail).trim().slice(0, 120));
     }
-    if (!response.ok || data?.error) {
-      throw new Error('HTTP ' + response.status + '：' + String(data?.reason || body).slice(0, 220));
-    }
-    return data;
-  } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('请求超时（' + timeoutMs + 'ms）');
-    throw error;
-  } finally {
-    clearTimeout(timer);
   }
+
+  throw new Error('Open-Meteo 所有连接节点均失败：' + failures.join('；').slice(0, 360));
 }
 
-async function retryJson(url, attempts = 3) {
+async function retryJson(url, attempts = 2) {
   let lastError;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -160,7 +189,7 @@ async function main() {
 
   if (!lastError) {
     try {
-      progress = validateProgress(await retryJson(makeUrl({ progress: true }), 2));
+      progress = validateProgress(await retryJson(makeUrl({ progress: true }), 1));
       progressFetchedAt = attemptedAt;
     } catch (error) {
       progressError = String(error.message || error).slice(0, 180);
