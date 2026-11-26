@@ -28,7 +28,7 @@ async function build() {
   html = html.replace(apiSetting, "window.GZ_API_BASE = '';");
 
   // 去掉原先使用的第三方字体 CDN，页面改用系统字体回退，减少外部依赖。
-  const externalFonts = '<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">\\n';
+  const externalFonts = '<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">\n';
   html = html.replace(externalFonts, '');
 
   await fs.rm(OUTPUT, { recursive: true, force: true });
@@ -47,6 +47,9 @@ async function build() {
   const publishedHtml = await fs.readFile(path.join(OUTPUT, 'index.html'), 'utf8');
   if (publishedHtml.includes('/api/forecast') || publishedHtml.includes('/api/geocoding')) {
     throw new Error('静态网站仍引用不可用的服务端 API');
+  }
+  if (publishedHtml.includes('miaoda.feishu.cn')) {
+    throw new Error('静态网站仍依赖原第三方字体 CDN');
   }
   for (const name of ASSETS) {
     await fs.access(path.join(OUTPUT, 'assets', name));
