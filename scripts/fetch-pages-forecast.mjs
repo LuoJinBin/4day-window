@@ -56,7 +56,7 @@ async function requestJson(url, timeoutMs = 25000) {
       '--connect-timeout', '4',
       '--max-time', String(Math.max(8, Math.min(10, Math.floor(timeoutMs / 1000)))),
       '--header', 'accept: application/json',
-      '--write-out', '\\n__HTTP_STATUS__:%{http_code}'
+      '--write-out', '__HTTP_STATUS__:%{http_code}'
     ];
     if (ip) args.push('--resolve', target.hostname + ':443:' + ip);
     args.push(url);
@@ -67,7 +67,7 @@ async function requestJson(url, timeoutMs = 25000) {
         maxBuffer: 8 * 1024 * 1024,
         timeout: timeoutMs + 3000
       });
-      const marker = '\\n__HTTP_STATUS__:';
+      const marker = '__HTTP_STATUS__:';
       const index = result.stdout.lastIndexOf(marker);
       if (index < 0) throw new Error('响应缺少 HTTP 状态码');
       const body = result.stdout.slice(0, index);
