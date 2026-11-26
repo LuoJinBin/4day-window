@@ -24,6 +24,7 @@ Thumbs.db
 # 测试 / 构建临时产物
 coverage/
 dist/
+dist-pages/
 *.tmp
 *.png
 !public/assets/**/*.png
