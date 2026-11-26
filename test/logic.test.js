@@ -189,6 +189,33 @@ test('模型权重合计 1.0，机构内多模式按平均权重合成一票', (
   assert.equal(splitProvider.orgs.find(o=>o.org==='ECMWF').cat,'多云');
 });
 
+test('少数模式报小雨但综合降雨未达门槛时，不把主天气标成雨', () => {
+  const recs = [
+    {p:'ecmwf_ifs025',name:'ECMWF',cond:'小雨',hi:19,lo:12,mm:1.1,pop:68,wind:8,out:false},
+    {p:'ecmwf_aifs025_single',name:'ECMWF-AI',cond:'小雨',hi:18,lo:13,mm:2.2,pop:null,wind:9,out:false},
+    {p:'ukmo_seamless',name:'UKMO',cond:'阴',hi:20,lo:13,mm:0,pop:11,wind:13,out:false},
+    {p:'cma_grapes_global',name:'CMA',cond:'多云',hi:21,lo:14,mm:0,pop:null,wind:13,out:false},
+    {p:'icon_seamless',name:'ICON',cond:'阴',hi:19,lo:13,mm:0,pop:14,wind:8,out:false},
+    {p:'meteofrance_seamless',name:'Météo-FR',cond:'小雨',hi:16,lo:13,mm:2.3,pop:null,wind:15,out:false}
+  ];
+  const result=metrics(recs,{},1);
+  assert.equal(result.rainy,false);
+  assert.equal(result.modal,'多云');
+  assert.equal(result.rainDisagreement,true);
+  assert.equal(result.rainLevel,'无');
+  assert.equal(wxWord(result),'多云');
+  assert.equal(riskText(riskOf(result),result),'模型分歧');
+
+  const window={days:[
+    Object.assign({date:'11-26'},result),
+    day({date:'11-27'}),
+    day({date:'11-28'}),
+    day({date:'11-29'})
+  ]};
+  assert.match(verdictOf(window).why,/少数模式报小雨/);
+  assert.match(verdictOf(window).why,/14%/);
+});
+
 test('ERA5 气候统计覆盖 11 年且无缺日', () => {
   assert.equal(CLIMO_META.years, 11);
   assert.equal(CLIMO_META.missingDays, 0);

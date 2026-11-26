@@ -86,13 +86,15 @@ function metrics(recs, wMap, lead){
   const heavyShare = wTotal>0? orgs.filter(o=> o.cat==='雨' && ((o.mm!=null && o.mm>=3.5) || (o.pop!=null && o.pop>=80)))
       .reduce((s,o)=>s+o.w,0)/wTotal : 0;
   const heavy = heavyShare>=0.5;
+  // 降雨判定门槛保持不变：加权多数且有降雨信号，或达到明显降雨门槛。
+  const rainy = (rainShare>=0.5 && forecastRainSignal) || heavy;
+  const rainDisagreement = (catW['雨']||0)>0 && !rainy;
   const overcastOrgs = orgs.filter(o=>o.cat==='阴').length;
   const overcastShare = wTotal>0? (catW['阴']||0)/wTotal : 0;
-  // 少数机构报阴保留为分歧信号，不再直接否决；阴天须达到独立机构加权多数。
-  if(modal==='雨' && !forecastRainSignal) modal = overcastShare>=0.5 ? '阴' : '多云';
+  // 少数模式报雨但未达到整体降雨门槛时，不把主天气显示成“雨”；风险仍单独保留。
+  if(modal==='雨' && !rainy) modal = overcastShare>=0.5 ? '阴' : '多云';
   const overcast = modal==='阴';
   const overcastMinority = !overcast && overcastShare>=0.3;
-  const rainy = (rainShare>=0.5 && forecastRainSignal) || heavy;
   const mist = orgs.some(o=>o.cat==='雨') && !forecastRainSignal;
   const rainLevel = rainy? '明显' : (mist? '零星' : '无');
   const nOrg=orgs.length, nModel=use.length;
@@ -115,7 +117,7 @@ function metrics(recs, wMap, lead){
       : diverge? '；各家分歧较大（最高温差 '+hiSpread.toFixed(1)+'℃）' : '；各家分歧不大');
   return {hi:hi,lo:lo,wind:wind,condScore:cs,popMed:popMed,popMax:popMax,mmMed:mmMed,
           score:dayScore(cs,hi==null?22:hi,lo==null?15:lo,popMax==null?20:popMax),
-          modal:modal,n:nModel,nOrg:nOrg,agree:agree,overcast:overcast,overcastOrgs:overcastOrgs,
+          modal:modal,n:nModel,nOrg:nOrg,agree:agree,rainDisagreement:rainDisagreement,overcast:overcast,overcastOrgs:overcastOrgs,
           overcastShare:overcastShare,overcastMinority:overcastMinority,rainy:rainy,mist:mist,
           rainLevel:rainLevel,ok:ok,loose:loose,trend:trend,outReason:outReason,
           conf:conf,confText:CONF_TXT[conf],confWhy:why,diverge:diverge,hiSpread:hiSpread,
@@ -236,6 +238,8 @@ function riskOf(d){
   return 1;
 }
 function riskText(r,d){
+  if(r===2 && d && d.rainDisagreement && d.popMed!=null && d.popMed<30
+    && d.popMax!=null && d.popMax>=40 && d.mmMed!=null && d.mmMed<1) return '模型分歧';
   const prefix=d && Number.isFinite(d.progressEstimateMm)? '后续降雨 ' : '降雨 ';
   return prefix+(r===3? '高' : r===2? '中' : '低');
 }
@@ -301,7 +305,19 @@ function verdictOf(w){
   if(pen<=72 && hiN.length<=1 && minConf>=1){
     const bits=[];
     if(hiN.length) bits.push(hiN.map(function(d){return d.date;}).join('、')+' 有明显降雨');
-    if(midN.length && !hiN.length) bits.push(midN.length+' 天可能飘点小雨，带把伞就行');
+    if(midN.length && !hiN.length){
+      const disputed=midN.filter(function(d){
+        return d.rainDisagreement && d.popMed!=null && d.popMed<30
+          && d.popMax!=null && d.popMax>=40 && d.mmMed!=null && d.mmMed<1;
+      });
+      if(disputed.length){
+        bits.push(disputed.map(function(d){
+          return d.date+' 少数模式报小雨（综合概率 '+Math.round(d.popMed)+'%，雨量中位数 '+d.mmMed.toFixed(1)+'mm）';
+        }).join('、')+'，不按确定降雨处理');
+      }else{
+        bits.push(midN.length+' 天可能飘点小雨，带把伞就行');
+      }
+    }
     if(cold.length) bits.push('最低到 '+Math.round(Math.min.apply(null,cold.map(function(d){return d.lo;}))) + '℃，早晚加件外套');
     if(hot.length) bits.push('最高到 '+Math.round(Math.max.apply(null,hot.map(function(d){return d.hi;}))) + '℃，中午偏热');
     if(minConf<=1) bits.push('日期还远，预报可能变');
@@ -466,6 +482,7 @@ function openPanel(d,btn){
     : d.outReason==='雨'? '过不了：多数机构报雨，或有明显降雨'
     : d.lead>7? '远期只作趋势参考，不出确定结论' : '置信度不够';
   const skyTxt = d.thin? '数据缺失，不能按晴或无雨处理'
+    : d.rainDisagreement? '多云（少数模式报小雨，未达到整体降雨判定）'
     : d.modal+'（'+d.nOrg+' 家机构里 '+d.agree+' 个模式同向，ECMWF 与 ECMWF-AI 只算一家）';
   const hourlyText=d.rainHoursState==='loading'? '正在读取逐小时降雨…'
     : d.rainHoursState==='unavailable'? '逐小时数据暂不可用'
