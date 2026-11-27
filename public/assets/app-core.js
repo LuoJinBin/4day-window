@@ -137,7 +137,7 @@ function applyDaylightWeatherCodes(daily,hourly,cutoff){
   const indicesByDate={};
   hourly.time.forEach(function(stamp,index){
     if(typeof stamp!=='string') return;
-    const match=/^(\\d{4}-\\d{2}-\\d{2})T(\\d{2}):/.exec(stamp);
+    const match=/^(\d{4}-\d{2}-\d{2})T(\d{2}):/.exec(stamp);
     if(!match || (cutoff && match[1]>=cutoff)) return;
     const hour=Number(match[2]);
     if(hour<7 || hour>17) return;
