@@ -77,7 +77,7 @@ test('携带衣物按实际出发日期逐日计算，并排除出发当天身�
   assert.equal(quantities['袜子'], 3);
   assert.equal(quantities['短袖上衣'], 1);
   assert.equal(quantities['长袖上衣'], 2);
-  assert.equal(quantities['下装（裤子/裙子）'], 2);
+  assert.equal(quantities['下装（裤子/裙子）'], 1);
   assert.equal(quantities['薄外套/防风外套'], 1);
   assert.equal(quantities['折叠伞'], 1);
 });
@@ -92,7 +92,7 @@ test('出发日已穿外套可在后续重复使用，不再重复计入行李',
   assert.equal(result.changeDays, 1);
   assert.ok(!names.includes('薄外套/防风外套'));
   assert.equal(result.items.find(item => item.name === '内裤').quantity, 1);
-  assert.equal(result.items.find(item => item.name === '下装（裤子/裙子）').quantity, 1);
+  assert.ok(!result.items.some(item => item.name === '下装（裤子/裙子）'));
 });
 
 test('任一行程日缺少有效逐日预报时不编造衣物清单', () => {
@@ -189,8 +189,12 @@ test('1、2、4、7 天窗口，指定日期不会被天气更好的日期自动
     const args = { days, start, end, length, preference: 'workdays', coverageStart: start, coverageEnd: end };
     const automatic = evaluatePlan({ ...args, mode: 'auto' }, scoring);
     const manual = evaluatePlan({ ...args, mode: 'manual' }, scoring);
-    assert.equal(automatic.current.days.length, length);
-    assert.equal(automatic.current.tier, 'strict');
+    if (length === 7) {
+      assert.equal(automatic.current, null);
+    } else {
+      assert.equal(automatic.current.days.length, length);
+      assert.equal(automatic.current.tier, 'strict');
+    }
     assert.equal(manual.current.start, start);
     assert.equal(manual.current.end, addDays(start, length - 1));
     assert.equal(manual.current.tier, 'unsuitable');

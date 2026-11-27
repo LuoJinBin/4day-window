@@ -188,7 +188,7 @@ export function recommendPacking(dailyData, departure, length) {
   add('短袖上衣', tops.short, '件', '对应较暖的行程日');
   add('长袖上衣', tops.long, '件', '对应气温中等的行程日');
   add('保暖上衣', tops.warm, '件', '对应最高温不超过 16℃ 的行程日');
-  add('下装（裤子/裙子）', Math.ceil(changeDays.length / 2), '条', '按每条连续穿两天计算');
+  add('下装（裤子/裙子）', Math.max(0, Math.ceil(count / 2) - 1), '条', '出发当天身上穿的那条也可连续穿两天');
   if (laterLayer > departureLayer) {
     add(laterLayer === 2 ? '保暖外套' : '薄外套/防风外套', 1, '件',
       '后续日期比出发日更冷或风更大，出发日身上的外套不够用');
@@ -205,7 +205,7 @@ export function recommendPacking(dailyData, departure, length) {
     changeDays: changeDays.length, minLow: Math.min(...days.map(day => day.lo)),
     maxHigh: Math.max(...days.map(day => day.hi)), days, items, rainDates: rainDays.map(day => day.date),
     departureLayer, laterLayer, uncertainDates,
-    rule: '按每天更换内裤、袜子和上衣，下装每两天一条；不假设途中洗衣。出发日身上穿的衣物不计，且可重复使用。'
+    rule: '按每天更换内裤、袜子和上衣；下装每两天一条，出发当天身上穿的那条也可重复穿。不假设途中洗衣。'
   };
 }
 
@@ -259,7 +259,9 @@ export function evaluatePlan({ days, start, end, length, mode, preference, cover
   for (let date = from; addDays(date, length - 1) <= to; date = addDays(date, 1)) {
     candidates.push(makeWindow(date, length, days));
   }
-  const windows = rankWindows(candidates, preference, scoring);
+  // Auto recommendations and alternatives are weekday-only. A manually chosen window remains unchanged.
+  const weekdayCandidates = candidates.filter(window => window.wk === 0);
+  const windows = rankWindows(weekdayCandidates, preference, scoring);
   if (mode === 'auto') return { current: windows[0] || null, alternatives: windows.slice(1) };
   const chosen = makeWindow(start, length, days);
   const tiers = Object.keys(TIERS);
