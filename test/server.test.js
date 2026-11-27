@@ -82,11 +82,11 @@ test('预报 URL 与页面同参：四点多值、六模式、Asia/Shanghai', ()
 test('GitHub Pages 静态预报也必须同步白天逐小时天气码', () => {
   const fetcher = fs.readFileSync(new URL('../scripts/fetch-pages-forecast.mjs', import.meta.url), 'utf8');
   const runtime = fs.readFileSync(new URL('../public/assets/app-runtime.js', import.meta.url), 'utf8');
-  assert.match(fetcher, /searchParams\\.set\\('hourly', 'weather_code'\\)/);
-  assert.match(fetcher, /searchParams\\.set\\('forecast_hours', '168'\\)/);
-  assert.match(fetcher, /searchParams\\.set\\('past_hours', '12'\\)/);
-  assert.match(fetcher, /point\\?\\.hourly\\?\\.time/);
-  assert.match(runtime, /applyDaylightWeatherCodes\\(daily,hourly,daylightCutoff\\(\\)\\)/);
+  assert.ok(fetcher.includes("url.searchParams.set('hourly', 'weather_code')"));
+  assert.ok(fetcher.includes("url.searchParams.set('forecast_hours', '168')"));
+  assert.ok(fetcher.includes("url.searchParams.set('past_hours', '12')"));
+  assert.ok(fetcher.includes('point?.hourly?.time'));
+  assert.ok(runtime.includes('applyDaylightWeatherCodes(daily,hourly,daylightCutoff())'));
 });
 
 test('坐标配置严格校验数量、格式和经纬度范围', () => {
