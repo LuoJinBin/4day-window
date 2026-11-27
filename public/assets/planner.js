@@ -1,5 +1,5 @@
 import { addDays, dateDistance, GUANGZHOU, localParts, periodOf, QUICK_CITIES, selectedHours, validCity, validDate, weekday } from './planner-calendar.js';
-import { assessDay, assessPeriod, evaluatePlan, hourDetails, indexHourly, TIERS, weatherLabel } from './planner-model.js';
+import { assessDay, assessPeriod, evaluatePlan, hourDetails, indexHourly, recommendPacking, TIERS, weatherLabel } from './planner-model.js';
 
 const scoring = { metrics, rankTripWindows, code: CODE, models: MDL };
 const byId = id => document.getElementById(id);
@@ -404,6 +404,51 @@ function reasonText(window, manual) {
   return lead[window.tier] + (concerns.length ? concerns.join('。') + '。' : '');
 }
 
+function renderPackingAdvice(current, opts, context) {
+  const panel = byId('packingAdvice');
+  panel.replaceChildren();
+  panel.append(element('h2', '最少携带衣物'));
+  const advice = recommendPacking(context.daily.data, current.start, opts.length);
+  if (!advice.available) {
+    const missing = advice.missingDates?.length
+      ? '缺少预报：' + advice.missingDates.map(shortDate).join('、') + '。' : '';
+    panel.append(element('p', advice.reason + missing, 'planner-packing-note'));
+    return;
+  }
+
+  panel.append(element('p',
+    dateLabel(advice.departure) + ' 出发 · ' + opts.length + ' 天 · ' +
+    dateLabel(advice.returnDate) + ' 结束 · 身上穿着的出发装不计入',
+    'planner-packing-intro'));
+
+  const list = element('ul', null, 'planner-packing-list');
+  for (const item of advice.items) {
+    const row = element('li');
+    row.append(element('strong', item.name + ' × ' + item.quantity + ' ' + item.unit),
+      element('small', item.reason));
+    list.append(row);
+  }
+  if (!advice.items.length) {
+    list.append(element('li', '当天往返，无需额外换洗衣物。'));
+  }
+  panel.append(list);
+  const weatherBasis = advice.days.map(day =>
+    shortDate(day.date) + ' ' + temperature(day.lo, day.hi) +
+    ((day.rainy || advice.rainDates.includes(day.date)) ? ' · 有雨风险' : '')
+  ).join('；');
+  panel.append(element('p', '天气依据：' + weatherBasis, 'planner-packing-note'));
+  panel.append(element('p', advice.rule, 'planner-packing-note'));
+
+  if (advice.uncertainDates.length) {
+    panel.append(element('p',
+      '以下日期预报距离较远或有效来源较少：' + advice.uncertainDates.map(shortDate).join('、') +
+      '。临近出发再刷新衣物清单。', 'planner-packing-note'));
+  }
+  if (context.daily.stale) {
+    panel.append(element('p', '当前使用的是缓存预报，建议临近出发重新查询。', 'planner-packing-note'));
+  }
+}
+
 function renderPlan(plan, opts, context) {
   const current = plan.current;
   const manual = opts.mode === 'manual';
@@ -423,6 +468,7 @@ function renderPlan(plan, opts, context) {
   foot.append(...summary.map(text => element('span', text)));
   const elapsedNotice = manual && opts.elapsed && current.start < opts.earliest ? '今天的所选时段已结束。' : '';
   byId('bestWindow').replaceChildren(top, element('p', elapsedNotice + reasonText(current, manual)), foot);
+  renderPackingAdvice(current, opts, context);
 
   const dailyButtons = current.days.map(day => {
     const control = button(null, () => openHours(day, control, opts, context));

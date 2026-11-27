@@ -411,7 +411,15 @@ footer b{color:var(--ink2)}
 .planner-pill[data-tier=unsuitable], .planner-pill[data-tier=unavailable] { background: #ffe1d8; color: #80341f; }
 .planner-result p:not(.planner-result-label) { margin: 10px 0 0; }
 .planner-result-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; color: #c5e6dc; font-size: .86rem; margin-top: 12px; border-top: 1px solid #ffffff30; padding-top: 10px; }
-.planner-comparison, .planner-evidence { margin-top: 13px; }
+.planner-comparison, .planner-evidence, .planner-packing { margin-top: 13px; }
+.planner-packing { padding: 15px; }
+.planner-packing h2 { margin: 0 0 8px; font-size: 1.12rem; }
+.planner-packing-intro { margin: 4px 0 10px; font-weight: 650; }
+.planner-packing-note { margin: 7px 0 0; color: var(--planner-muted); font-size: .86rem; }
+.planner-packing-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; list-style: none; padding: 0; margin: 10px 0 0; }
+.planner-packing-list li { border: 1px solid var(--planner-line); border-radius: 9px; padding: 10px 12px; min-width: 0; }
+.planner-packing-list strong { display: block; font-size: .93rem; }
+.planner-packing-list small { display: block; margin-top: 3px; color: var(--planner-muted); font-size: .8rem; }
 .planner-comparison { padding: 15px; }
 .planner-comparison h2, .planner-evidence h2 { margin: 0 0 9px; font-size: 1.12rem; }
 .planner-hour-hint { margin: -4px 0 9px; }

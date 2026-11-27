@@ -4,7 +4,7 @@ import { CODE, MDL, metrics, rankTripWindows } from '../src/core/logic.js';
 import { createApp } from '../server/index.js';
 import { createPlannerService, forecastQuery } from '../server/planner-service.js';
 import { addDays, GUANGZHOU, HOUR_MS, localParts, periodOf, QUICK_CITIES, selectedHours } from '../public/assets/planner-calendar.js';
-import { assessDay, assessPeriod, evaluatePlan, indexHourly, makeWindow, rankWindows } from '../public/assets/planner-model.js';
+import { assessDay, assessPeriod, evaluatePlan, indexHourly, makeWindow, rankWindows, recommendPacking } from '../public/assets/planner-model.js';
 
 const models = Object.keys(MDL);
 const scoring = { code: CODE, models: MDL, metrics, rankTripWindows };
@@ -59,6 +59,49 @@ function mockForecast(url) {
   });
   return Response.json(responses.length === 1 ? responses[0] : responses);
 }
+
+test('携带衣物按实际出发日期逐日计算，并排除出发当天身上穿的一套', () => {
+  const daily = [
+    { date: '2026-11-27', n: 6, nOrg: 5, hi: 29, lo: 22, wind: 12, popMed: 5, mmMed: 0 },
+    { date: '2026-11-28', n: 6, nOrg: 5, hi: 30, lo: 23, wind: 12, popMed: 5, mmMed: 0 },
+    { date: '2026-11-29', n: 6, nOrg: 5, hi: 23, lo: 16, wind: 38, popMed: 10, mmMed: 0 },
+    { date: '2026-11-30', n: 6, nOrg: 5, hi: 18, lo: 12, wind: 15, popMed: 65, mmMed: 1.5, rainy: true }
+  ];
+  const result = recommendPacking(daily, '2026-11-27', 4);
+  assert.equal(result.available, true);
+  assert.equal(result.departure, '2026-11-27');
+  assert.equal(result.returnDate, '2026-11-30');
+  assert.equal(result.changeDays, 3);
+  const quantities = Object.fromEntries(result.items.map(item => [item.name, item.quantity]));
+  assert.equal(quantities['内裤'], 3);
+  assert.equal(quantities['袜子'], 3);
+  assert.equal(quantities['短袖上衣'], 1);
+  assert.equal(quantities['长袖上衣'], 2);
+  assert.equal(quantities['下装（裤子/裙子）'], 2);
+  assert.equal(quantities['薄外套/防风外套'], 1);
+  assert.equal(quantities['折叠伞'], 1);
+});
+
+test('出发日已穿外套可在后续重复使用，不再重复计入行李', () => {
+  const daily = [
+    { date: '2026-11-27', n: 6, hi: 17, lo: 12, wind: 12, popMed: 5, mmMed: 0 },
+    { date: '2026-11-28', n: 6, hi: 18, lo: 13, wind: 12, popMed: 5, mmMed: 0 }
+  ];
+  const result = recommendPacking(daily, '2026-11-27', 2);
+  const names = result.items.map(item => item.name);
+  assert.equal(result.changeDays, 1);
+  assert.ok(!names.includes('薄外套/防风外套'));
+  assert.equal(result.items.find(item => item.name === '内裤').quantity, 1);
+  assert.equal(result.items.find(item => item.name === '下装（裤子/裙子）').quantity, 1);
+});
+
+test('任一行程日缺少有效逐日预报时不编造衣物清单', () => {
+  const daily = [{ date: '2026-11-27', n: 6, hi: 20, lo: 15, wind: 10 }];
+  const result = recommendPacking(daily, '2026-11-27', 2);
+  assert.equal(result.available, false);
+  assert.deepEqual(result.missingDates, ['2026-11-28']);
+  assert.deepEqual(result.items, undefined);
+});
 
 test('当地日期按目的地计算，跨国际日期变更线也不会沿用广州日历', () => {
   const sameTime = Date.parse('2026-11-25T02:30:00Z');
