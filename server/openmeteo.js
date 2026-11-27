@@ -1,4 +1,4 @@
-import { aggPoints, fromOpenMeteo, MDL } from '../src/core/logic.js';
+import { aggPoints, fromOpenMeteo, MDL, applyDaylightWeatherCodes } from '../src/core/logic.js';
 import { addDays } from '../public/assets/planner-calendar.js';
 
 const DAILY = [
@@ -28,69 +28,6 @@ export function buildForecastUrl(cfg) {
   return cfg.forecastBase + '?' + qs;
 }
 
-
-// Open-Meteo daily weather_code is the most severe condition of the day,
-// not the representative daytime sky. Derive a daylight category from hourly
-// codes so a few overcast hours do not label an otherwise clear/partly-cloudy day "overcast".
-function weatherGroup(code) {
-  if (code === 0 || code === 1) return 'clear';
-  if (code === 2) return 'cloudy';
-  if (code === 3 || code === 45 || code === 48) return 'overcast';
-  return 'precipitation';
-}
-
-function applyDaylightWeatherCodes(daily, hourly, cutoff) {
-  if (!daily || !Array.isArray(daily.time) || !hourly
-    || !Array.isArray(hourly.time)) return 0;
-
-  const indicesByDate = new Map();
-  hourly.time.forEach((stamp, index) => {
-    if (typeof stamp !== 'string') return;
-    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):/.exec(stamp);
-    if (!match || (cutoff && match[1] >= cutoff)) return;
-    const hour = Number(match[2]);
-    if (hour < 7 || hour > 17) return;
-    const indices = indicesByDate.get(match[1]) || [];
-    indices.push(index);
-    indicesByDate.set(match[1], indices);
-  });
-
-  let applied = 0;
-  Object.keys(MDL).forEach((model) => {
-    const key = 'weather_code_' + model;
-    const hourlyCodes = hourly[key];
-    const dailyCodes = daily[key];
-    if (!Array.isArray(hourlyCodes) || !Array.isArray(dailyCodes)) return;
-
-    daily.time.forEach((date, dayIndex) => {
-      const original = dailyCodes[dayIndex];
-      // Keep precipitation as the most severe condition; precipitation risk is
-      // also evaluated independently from daily amount and probability.
-      if (original == null || weatherGroup(original) === 'precipitation') return;
-
-      const indices = indicesByDate.get(date) || [];
-      const counts = { clear: 0, cloudy: 0, overcast: 0 };
-      let valid = 0;
-      indices.forEach((hourIndex) => {
-        const code = hourlyCodes[hourIndex];
-        if (code == null) return;
-        const group = weatherGroup(code);
-        if (group === 'precipitation') return;
-        counts[group] += 1;
-        valid += 1;
-      });
-      // A model must provide at least six daylight hours; otherwise retain its
-      // daily code rather than manufacture a daytime classification.
-      if (valid < 6) return;
-
-      const overcastShare = counts.overcast / valid;
-      const clearShare = counts.clear / valid;
-      dailyCodes[dayIndex] = overcastShare >= 0.6 ? 3 : clearShare >= 0.6 ? 0 : 2;
-      applied += 1;
-    });
-  });
-  return applied;
-}
 
 export async function requestOpenMeteo(url, { fetchImpl = fetch, timeoutMs = 14_000, attempts = 3 } = {}) {
   let json;

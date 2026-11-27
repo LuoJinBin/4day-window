@@ -47,8 +47,9 @@ function syntheticHourly() {
     hourly['weather_code_' + model] = time.map((stamp) => {
       const dayIndex = dates.indexOf(stamp.slice(0, 10));
       const hour = Number(stamp.slice(11, 13));
-      if (dayIndex === 0) return hour <= 11 ? 0 : 2; // Clear morning, partly cloudy afternoon.
+      if (dayIndex === 0) return hour <= 11 ? 0 : 2; // Mixed clear and partly cloudy.
       if (dayIndex === 1) return 3; // Overcast for nearly all daylight hours.
+      if (dayIndex === 2) return hour <= 15 ? 0 : 2; // Mostly sunny daytime.
       return 2;
     });
   });
@@ -76,6 +77,16 @@ test('预报 URL 与页面同参：四点多值、六模式、Asia/Shanghai', ()
   assert.match(url, /forecast_hours=168/);
   assert.match(url, /past_hours=12/);
   assert.match(url, /models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless,cma_grapes_global,icon_seamless,meteofrance_seamless/);
+});
+
+test('GitHub Pages 静态预报也必须同步白天逐小时天气码', () => {
+  const fetcher = fs.readFileSync(new URL('../scripts/fetch-pages-forecast.mjs', import.meta.url), 'utf8');
+  const runtime = fs.readFileSync(new URL('../public/assets/app-runtime.js', import.meta.url), 'utf8');
+  assert.match(fetcher, /searchParams\\.set\\('hourly', 'weather_code'\\)/);
+  assert.match(fetcher, /searchParams\\.set\\('forecast_hours', '168'\\)/);
+  assert.match(fetcher, /searchParams\\.set\\('past_hours', '12'\\)/);
+  assert.match(fetcher, /point\\?\\.hourly\\?\\.time/);
+  assert.match(runtime, /applyDaylightWeatherCodes\\(daily,hourly,daylightCutoff\\(\\)\\)/);
 });
 
 test('坐标配置严格校验数量、格式和经纬度范围', () => {
@@ -121,6 +132,8 @@ test('日间逐小时多数修正全天最严重天气码造成的阴天误判',
   assert.equal(view.days[0].modal, '多云');
   assert.equal(view.days[0].overcast, false);
   assert.equal(view.days[1].modal, '阴');
+  assert.equal(view.days[2].modal, '晴');
+  assert.equal(view.days[2].overcast, false);
   assert.equal(view.days[8].modal, '雨');
 });
 

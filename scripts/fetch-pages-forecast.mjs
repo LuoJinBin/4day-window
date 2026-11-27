@@ -34,7 +34,10 @@ function makeUrl({ progress = false } = {}) {
     url.searchParams.set('past_days', '7');
     url.searchParams.set('forecast_days', '1');
   } else {
+    url.searchParams.set('hourly', 'weather_code');
     url.searchParams.set('forecast_days', '16');
+    url.searchParams.set('forecast_hours', '168');
+    url.searchParams.set('past_hours', '12');
   }
   return url.toString();
 }
@@ -116,13 +119,37 @@ function validateForecast(payload) {
   if (points.length !== 4) throw new Error('预报点位数量异常：' + points.length);
   const dates = points[0]?.daily?.time;
   if (!Array.isArray(dates) || dates.length < 6) throw new Error('预报日期不足');
+  const hourlyTimes = points[0]?.hourly?.time;
+  if (!Array.isArray(hourlyTimes) || !hourlyTimes.length) throw new Error('预报缺少逐小时天气码');
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+  const daylightTimes = hourlyTimes.filter((stamp) => {
+    if (typeof stamp !== 'string' || stamp.slice(0, 10) !== today) return false;
+    const hour = Number(stamp.slice(11, 13));
+    return Number.isInteger(hour) && hour >= 7 && hour <= 17;
+  });
+  if (daylightTimes.length < 6) throw new Error('当天白天逐小时天气码不足');
   for (const [index, point] of points.entries()) {
     const time = point?.daily?.time;
     if (!Array.isArray(time) || time.length !== dates.length ||
       time.some((date, i) => date !== dates[i])) {
       throw new Error('四个城区点位的日期序列不一致（点位 ' + (index + 1) + '）');
     }
+    const hourly = point?.hourly?.time;
+    if (!Array.isArray(hourly) || hourly.length !== hourlyTimes.length ||
+      hourly.some((stamp, i) => stamp !== hourlyTimes[i])) {
+      throw new Error('四个城区点位的逐小时序列不一致（点位 ' + (index + 1) + '）');
+    }
   }
+  const hourlyModels = MODELS.filter((model) => points.some((point) => {
+    const values = point?.hourly?.['weather_code_' + model];
+    return Array.isArray(values) && daylightTimes.some((stamp) => {
+      const i = hourlyTimes.indexOf(stamp);
+      return i >= 0 && values[i] != null;
+    });
+  }));
+  if (hourlyModels.length < 3) throw new Error('当天逐小时有效模式不足：' + hourlyModels.join(','));
   const availableModels = MODELS.filter(model => points.some(point =>
     Array.isArray(point.daily['weather_code_' + model]) &&
     point.daily['weather_code_' + model].some(value => value != null)

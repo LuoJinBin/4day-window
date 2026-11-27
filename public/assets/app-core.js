@@ -123,6 +123,53 @@ function metrics(recs, wMap, lead){
           conf:conf,confText:CONF_TXT[conf],confWhy:why,diverge:diverge,hiSpread:hiSpread,
           lead:lead,orgs:orgs,thin:thin};
 }
+
+// Open-Meteo daily weather_code is the most severe condition of the day,
+// not the representative daytime sky. Derive the 07:00–17:00 category from hourly codes.
+function weatherGroup(code){
+  if(code===0 || code===1) return 'clear';
+  if(code===2) return 'cloudy';
+  if(code===3 || code===45 || code===48) return 'overcast';
+  return 'precipitation';
+}
+function applyDaylightWeatherCodes(daily,hourly,cutoff){
+  if(!daily || !Array.isArray(daily.time) || !hourly || !Array.isArray(hourly.time)) return 0;
+  const indicesByDate={};
+  hourly.time.forEach(function(stamp,index){
+    if(typeof stamp!=='string') return;
+    const match=/^(\\d{4}-\\d{2}-\\d{2})T(\\d{2}):/.exec(stamp);
+    if(!match || (cutoff && match[1]>=cutoff)) return;
+    const hour=Number(match[2]);
+    if(hour<7 || hour>17) return;
+    (indicesByDate[match[1]]||(indicesByDate[match[1]]=[])).push(index);
+  });
+  let applied=0;
+  Object.keys(MDL).forEach(function(model){
+    const key='weather_code_'+model, hourlyCodes=hourly[key], dailyCodes=daily[key];
+    if(!Array.isArray(hourlyCodes) || !Array.isArray(dailyCodes)) return;
+    daily.time.forEach(function(date,dayIndex){
+      const original=dailyCodes[dayIndex];
+      // Keep a daily precipitation code; rain risk is assessed separately as well.
+      if(original==null || weatherGroup(original)==='precipitation') return;
+      const indices=indicesByDate[date]||[];
+      const counts={clear:0,cloudy:0,overcast:0};
+      let valid=0;
+      indices.forEach(function(hourIndex){
+        const code=hourlyCodes[hourIndex];
+        if(code==null) return;
+        const group=weatherGroup(code);
+        if(group==='precipitation') return;
+        counts[group]+=1; valid+=1;
+      });
+      // Require six usable daylight hours; otherwise retain the original daily code.
+      if(valid<6) return;
+      const overcastShare=counts.overcast/valid, clearShare=counts.clear/valid;
+      dailyCodes[dayIndex]=overcastShare>=0.6?3:clearShare>=0.6?0:2;
+      applied+=1;
+    });
+  });
+  return applied;
+}
 function compareWindowPreference(a,b,badKey='bad',tolerance=5){
   const ba=Number.isFinite(a[badKey])?a[badKey]:0;
   const bb=Number.isFinite(b[badKey])?b[badKey]:0;

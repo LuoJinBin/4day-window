@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SNAP, buildWindows, rankTripWindows, selectDisplayWindow, windowVerdict, verdictOf, winPen, riskOf, confTier, forecastMeta, metrics, wxWord, riskText,
-  chinaParts, chinaIso, leadOf, applyDayProgress, completedHourlyRainEstimate, aggPoints,
+  chinaParts, chinaIso, leadOf, applyDayProgress, completedHourlyRainEstimate, aggPoints, applyDaylightWeatherCodes,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
 
@@ -214,6 +214,18 @@ test('少数模式报小雨但综合降雨未达门槛时，不把主天气标�
   ]};
   assert.match(verdictOf(window).why,/少数模式报小雨/);
   assert.match(verdictOf(window).why,/14%/);
+});
+
+test('日间晴朗时，用逐小时天气码纠正全天最严重天气码', () => {
+  const times=Array.from({length:11},(_,i)=>'2026-11-27T'+String(i+7).padStart(2,'0')+':00');
+  const daily={time:['2026-11-27']}, hourly={time:times};
+  Object.keys(MDL).forEach((model)=>{
+    daily['weather_code_'+model]=[3];
+    hourly['weather_code_'+model]=times.map((_,i)=>i<9?0:2);
+  });
+  const applied=applyDaylightWeatherCodes(daily,hourly,'2026-12-04');
+  assert.equal(applied,6);
+  Object.keys(MDL).forEach((model)=>assert.equal(daily['weather_code_'+model][0],0));
 });
 
 test('ERA5 气候统计覆盖 11 年且无缺日', () => {

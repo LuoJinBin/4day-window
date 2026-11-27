@@ -67,7 +67,7 @@ function snapshotView(){
 }
 const SNAP_TIME='2026-11-19 12:30';
 const SNAP_RAW={"time":["2026-11-19","2026-11-20","2026-11-21","2026-11-22","2026-11-23","2026-11-24","2026-11-25","2026-11-26","2026-11-27","2026-11-28","2026-11-29","2026-11-30","2026-12-01","2026-12-02","2026-12-03","2026-12-04"],"weather_code_ecmwf_ifs025":[51,51,3,3,51,51,51,51,3,2,3,3,51,51,3,null],"temperature_2m_max_ecmwf_ifs025":[22.0,17.4,20.9,22.8,22.5,21.8,18.0,23.7,21.7,24.6,22.2,23.1,21.2,23.7,25.2,null],"temperature_2m_min_ecmwf_ifs025":[15.6,11.7,9.9,11.2,17.0,16.8,13.1,14.9,16.1,12.2,9.7,9.6,13.6,15.5,16.9,null],"precipitation_sum_ecmwf_ifs025":[0.2,3.9,0.1,0.0,2.8,20.9,5.8,2.1,0.2,0.0,0.0,0.0,2.8,1.5,0.0,null],"precipitation_probability_max_ecmwf_ifs025":[8.0,75.0,1.0,2.0,69.0,88.0,47.0,41.0,18.0,7.0,4.0,4.0,16.0,20.0,15.0,null],"wind_speed_10m_max_ecmwf_ifs025":[15.2,15.2,8.4,10.6,10.6,15.8,12.3,4.7,5.5,17.0,9.4,5.8,7.9,7.3,9.7,null],"weather_code_ecmwf_aifs025_single":[51,51,3,51,51,51,51,0,0,0,2,51,51,51,2,null],"temperature_2m_max_ecmwf_aifs025_single":[21.2,16.8,21.1,19.9,19.7,21.1,18.7,22.3,24.8,25.9,25.1,23.4,26.1,27.5,28.6,null],"temperature_2m_min_ecmwf_aifs025_single":[16.4,12.3,10.8,13.4,16.2,16.2,14.3,13.1,14.6,15.0,14.4,18.1,19.3,20.4,20.6,null],"precipitation_sum_ecmwf_aifs025_single":[0.8,7.2,0.9,0.0,3.0,12.6,0.2,0.2,0.0,0.0,0.0,0.5,0.8,0.3,0.0,0.8],"precipitation_probability_max_ecmwf_aifs025_single":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_ecmwf_aifs025_single":[16.9,18.6,11.7,9.0,15.9,21.8,13.5,7.3,6.9,11.5,10.1,9.0,9.5,5.4,10.5,null],"weather_code_ukmo_seamless":[3,3,3,3,51,51,51,null,null,null,null,null,null,null,null,null],"temperature_2m_max_ukmo_seamless":[22.2,18.7,22.2,22.7,25.3,22.8,16.0,null,null,null,null,null,null,null,null,null],"temperature_2m_min_ukmo_seamless":[16.0,14.4,11.9,14.7,18.6,14.3,12.6,null,null,null,null,null,null,null,null,null],"precipitation_sum_ukmo_seamless":[0.0,0.0,0.0,0.0,0.4,13.8,2.4,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_ukmo_seamless":[0.0,22.0,0.0,11.0,72.0,78.0,23.0,6.0,17.0,10.0,null,null,null,null,null,null],"wind_speed_10m_max_ukmo_seamless":[15.3,16.5,10.9,10.8,10.2,18.0,12.8,null,null,null,null,null,null,null,null,null],"weather_code_cma_grapes_global":[2,51,2,2,51,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_max_cma_grapes_global":[20.6,16.7,19.6,20.1,21.1,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_min_cma_grapes_global":[15.8,13.4,9.9,12.5,17.2,null,null,null,null,null,null,null,null,null,null,null],"precipitation_sum_cma_grapes_global":[0.0,3.6,0.2,0.0,0.3,null,null,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_cma_grapes_global":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_cma_grapes_global":[21.9,21.3,12.3,10.3,14.2,null,null,null,null,null,null,null,null,null,null,null],"weather_code_icon_seamless":[3,51,3,3,3,3,51,null,null,null,null,null,null,null,null,null],"temperature_2m_max_icon_seamless":[21.2,16.6,20.1,17.7,16.8,18.2,14.7,null,null,null,null,null,null,null,null,null],"temperature_2m_min_icon_seamless":[16.0,12.0,11.3,14.1,15.9,14.4,10.4,null,null,null,null,null,null,null,null,null],"precipitation_sum_icon_seamless":[0.0,7.1,0.0,0.0,0.4,0.7,21.7,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_icon_seamless":[6.5,81.5,3.0,4.0,49.0,59.0,61.0,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_icon_seamless":[12.8,10.2,9.1,4.5,5.8,15.9,10.3,null,null,null,null,null,null,null,null,null],"weather_code_meteofrance_seamless":[3,51,3,3,null,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_max_meteofrance_seamless":[20.6,19.1,20.9,21.5,null,null,null,null,null,null,null,null,null,null,null,null],"temperature_2m_min_meteofrance_seamless":[16.4,11.7,10.4,11.8,null,null,null,null,null,null,null,null,null,null,null,null],"precipitation_sum_meteofrance_seamless":[0.0,7.0,0.0,0.0,null,null,null,null,null,null,null,null,null,null,null,null],"precipitation_probability_max_meteofrance_seamless":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"wind_speed_10m_max_meteofrance_seamless":[22.4,25.1,14.3,12.5,null,null,null,null,null,null,null,null,null,null,null,null]};
-const CACHE_KEY='gz_wx_v10', TTL=6*3600*1000;
+const CACHE_KEY='gz_wx_v11', TTL=6*3600*1000;
 let VIEW=null;
 
 function setStatus(kind,text,engine){
@@ -137,10 +137,15 @@ function saveCache(view, ts){
   try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts:stamp, view:view})); }catch(e){}
 }
 function hm(ts){ const p=chinaParts(ts); return p.hour+':'+p.minute; }
+function daylightCutoff(){
+  const d=new Date(chinaIso(new Date())+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate()+7);
+  return d.toISOString().slice(0,10);
+}
 
 const API_BASE='https://api.open-meteo.com/v1/forecast?latitude=23.125,23.129,23.135,23.09&longitude=113.24,113.267,113.33,113.31'
  +'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max'
- +'&timezone=Asia%2FShanghai&forecast_days=16';
+ +'&hourly=weather_code&timezone=Asia%2FShanghai&forecast_days=16&forecast_hours=168&past_hours=12';
 const API_GROUPS=['&models=ecmwf_ifs025,ecmwf_aifs025_single,ukmo_seamless',
                   '&models=cma_grapes_global,icon_seamless,meteofrance_seamless'];
 function aggPoints(list){
@@ -203,8 +208,12 @@ async function fetchStaticForecastView(force=false){
   const payload=await loadStaticForecastPayload(force);
   const points=Array.isArray(payload.forecast)?payload.forecast:[payload.forecast];
   const dailyList=points.map(function(x){ return x && x.daily; }).filter(Boolean);
+  const hourlyList=points.map(function(x){ return x && x.hourly; }).filter(Boolean);
   if(!dailyList.length) throw new Error('自动同步数据缺少逐日预报');
+  if(hourlyList.length!==dailyList.length) throw new Error('自动同步数据缺少完整逐小时天气码');
   const daily=aggPoints(dailyList);
+  const hourly=aggPoints(hourlyList);
+  applyDaylightWeatherCodes(daily,hourly,daylightCutoff());
   const view=fromOpenMeteo({daily:daily});
   if(!view) throw new Error('自动同步数据不足');
   const ts=Date.parse(payload.fetchedAt);
@@ -227,10 +236,16 @@ async function getDaily(url,ms){
       return null;
     }
     const j=await r.json();
-    const arr=Array.isArray(j)? j.map(function(x){return x.daily;}).filter(Boolean) : (j && j.daily? [j.daily] : []);
+    const points=Array.isArray(j)?j:[j];
+    const arr=points.map(function(x){return x && x.daily;}).filter(Boolean);
+    const hourlyArr=points.map(function(x){return x && x.hourly;}).filter(Boolean);
     if(!arr.length){ LIVE_FETCH_ERROR='接口没有返回逐日预报'; return null; }
-    try{ return aggPoints(arr); }
-    catch(e){ LIVE_FETCH_ERROR='返回数据格式异常：'+(e && e.message?e.message:'日期不一致'); return null; }
+    if(hourlyArr.length!==arr.length){ LIVE_FETCH_ERROR='接口没有返回完整逐小时天气码'; return null; }
+    try{
+      const daily=aggPoints(arr), hourly=aggPoints(hourlyArr);
+      applyDaylightWeatherCodes(daily,hourly,daylightCutoff());
+      return daily;
+    }catch(e){ LIVE_FETCH_ERROR='返回数据格式异常：'+(e && e.message?e.message:'日期不一致'); return null; }
   }catch(e){
     LIVE_FETCH_ERROR=e && e.name==='AbortError'?'请求超时':'浏览器无法连接 Open-Meteo（网络或跨域限制）';
     return null;
