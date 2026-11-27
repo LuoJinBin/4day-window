@@ -252,6 +252,61 @@ function packDays(raw){
   });
 }
 
+function recommendPacking(days){
+  if(!Array.isArray(days) || days.length!==4){
+    return {available:false, missingDates:[], reason:'需要完整的四天行程预报，暂不生成衣物数量。'};
+  }
+  const missingDates=days.filter(d=>!d || !(d.n>0) ||
+    !Number.isFinite(d.hi) || !Number.isFinite(d.lo)).map(d=>d && d.date ? d.date : '未知日期');
+  if(missingDates.length){
+    return {available:false, missingDates, reason:'部分日期缺少完整天气数据，暂不编造衣物数量。'};
+  }
+
+  const changeDays=days.slice(1);
+  const tops={short:0,long:0,warm:0};
+  changeDays.forEach(function(d){
+    if(d.hi>=25) tops.short+=1;
+    else if(d.hi<=16) tops.warm+=1;
+    else tops.long+=1;
+  });
+
+  // Reuse the departure outfit. A jacket is packed only if a later day needs a warmer layer.
+  const layerLevel=function(d){
+    const wind=Number.isFinite(d.wind)?d.wind:0;
+    if(d.lo<10 || d.hi<=15) return 2;
+    if(d.lo<18 || wind>=35) return 1;
+    return 0;
+  };
+  const departureLayer=layerLevel(days[0]);
+  const laterLayer=Math.max(0,...changeDays.map(layerLevel));
+  const items=[];
+  const add=function(name,quantity,unit,reason){
+    if(quantity>0) items.push({name,quantity,unit,reason});
+  };
+
+  add('内裤',changeDays.length,'条','每天更换；出发当天身上穿的 1 条不计');
+  add('袜子',changeDays.length,'双','每天更换；出发当天身上穿的 1 双不计');
+  add('短袖上衣',tops.short,'件','对应最高温 25℃ 及以上的行程日');
+  add('长袖上衣',tops.long,'件','对应最高温 17–24℃ 的行程日');
+  add('保暖上衣',tops.warm,'件','对应最高温不超过 16℃ 的行程日');
+  add('下装（裤子/裙子）',Math.max(0,Math.ceil(days.length/2)-1),'条',
+    '身上穿的那条按连续穿两天计算，之后每两天换一条');
+  if(laterLayer>departureLayer){
+    add(laterLayer===2?'保暖外套':'薄外套/防风外套',1,'件',
+      '后续日期比出发日更冷或风更大；出发时身上的外套不够用');
+  }
+  if(days.some(d=>riskOf(d)>=2)){
+    add('折叠伞',1,'把','行程中有降雨信号，整趟共用一把');
+  }
+
+  const uncertainDates=days.filter(d=>d.conf<=1 || d.lead>7 || d.nOrg<3).map(d=>d.date);
+  return {
+    available:true, departure:days[0].date, returnDate:days[3].date,
+    items, days, uncertainDates,
+    rule:'按每天更换内裤、袜子和上衣；下装每两天一条（出发身上那条也可重复穿）。不假设途中洗衣，出发当天身上穿的衣物不计入。'
+  };
+}
+
 /* ---------- 结论文案 ---------- */
 /* ---------- 极简首屏：只回答去哪儿、什么时候、什么天气 ---------- */
 let LAST_TS=null;
@@ -321,7 +376,10 @@ function winPen(w){
 }
 function rankTripWindows(wins){
   if(!Array.isArray(wins)||!wins.length) return null;
-  const scored=wins.map(function(w){
+  // Auto recommendations are strictly weekday-only; a better forecast never overrides this rule.
+  const eligible=wins.filter(function(w){ return w && w.wk===0; });
+  if(!eligible.length) return null;
+  const scored=eligible.map(function(w){
     return {w:w,pen:winPen(w),conf:Math.min.apply(null,w.days.map(function(d){return d.conf;}))};
   });
   const minPen=Math.min.apply(null,scored.map(function(x){return x.pen;}));
@@ -376,17 +434,20 @@ function verdictOf(w){
   return {k:'wait',t:'建议继续等待',why:why+'，现在订行程容易踩空。日期近了会重新算。'};
 }
 function selectDisplayWindow(wins){
+  // Keep Saturday/Sunday out of every tier and every fallback, not merely as a ranking preference.
+  const weekdays=(Array.isArray(wins)?wins:[]).filter(function(w){ return w && w.wk===0; });
+  if(!weekdays.length) return null;
   const tiers=[
-    ['strict',wins.filter(w=>w.valid)],
-    ['loose',wins.filter(w=>w.looseValid)],
-    ['trend',wins.filter(w=>w.trendValid)]
+    ['strict',weekdays.filter(w=>w.valid)],
+    ['loose',weekdays.filter(w=>w.looseValid)],
+    ['trend',weekdays.filter(w=>w.trendValid)]
   ];
   for(const entry of tiers){
     if(entry[1].length){
       return {tier:entry[0],window:rankTripWindows(entry[1]),candidates:entry[1]};
     }
   }
-  const best=rankTripWindows(wins);
+  const best=rankTripWindows(weekdays);
   return best? {tier:'none',window:best,candidates:[]} : null;
 }
 function windowVerdict(w,tier){
@@ -407,22 +468,115 @@ function windowVerdict(w,tier){
   return {k:'wait',t:'建议继续等待',why:'当前预报没有满足严格晴好或阴天放宽条件的连续四天窗口，继续等待下一轮预报。'};
 }
 
+function renderPacking(days, view){
+  const panel=document.getElementById('sPacking');
+  if(!panel) return;
+  panel.replaceChildren();
+  const advice=recommendPacking(days);
+  panel.hidden=false;
+
+  const head=document.createElement('div');
+  head.className='s-pack-head';
+  const title=document.createElement('h2');
+  title.textContent='最少携带衣物';
+  const scope=document.createElement('span');
+  scope.textContent='不含出发当天身上穿的衣物';
+  head.append(title,scope);
+  panel.append(head);
+
+  if(!advice.available){
+    const message=document.createElement('p');
+    message.className='s-pack-note';
+    message.textContent=advice.reason+(advice.missingDates.length
+      ? ' 缺少预报：'+advice.missingDates.join('、')+'。' : '');
+    panel.append(message);
+    return;
+  }
+
+  const intro=document.createElement('p');
+  intro.className='s-pack-intro';
+  intro.textContent=advice.departure+' '+days[0].wd+' 出发 · '+days.length+' 天 · '+advice.returnDate+' '+days[3].wd+' 结束';
+  panel.append(intro);
+
+  const list=document.createElement('ul');
+  list.className='s-pack-list';
+  advice.items.forEach(function(item){
+    const row=document.createElement('li');
+    const name=document.createElement('b');
+    name.textContent=item.name+' × '+item.quantity+' '+item.unit;
+    const reason=document.createElement('small');
+    reason.textContent=item.reason;
+    row.append(name,reason);
+    list.append(row);
+  });
+  if(!advice.items.length){
+    const row=document.createElement('li');
+    row.textContent='无需额外换洗衣物。';
+    list.append(row);
+  }
+  panel.append(list);
+
+  const weather=document.createElement('p');
+  weather.className='s-pack-note';
+  weather.textContent='天气依据：'+days.map(function(d){
+    return d.date+' '+d.wd+' '+Math.round(d.hi)+'°/'+Math.round(d.lo)+'°'+
+      (riskOf(d)>=2?' · 有雨风险':'');
+  }).join('；');
+  panel.append(weather);
+
+  const rule=document.createElement('p');
+  rule.className='s-pack-note';
+  rule.textContent=advice.rule;
+  panel.append(rule);
+
+  if(advice.uncertainDates.length){
+    const note=document.createElement('p');
+    note.className='s-pack-note';
+    note.textContent='以下日期预报把握较低：'+advice.uncertainDates.join('、')+'；临近出发再刷新清单。';
+    panel.append(note);
+  }
+  if(view && view.stale){
+    const note=document.createElement('p');
+    note.className='s-pack-note';
+    note.textContent='当前使用的是旧预报，临近出发请重新计算。';
+    panel.append(note);
+  }
+}
+
 function renderSimple(view){
   const rEl=document.getElementById('sRange'); if(!rEl) return;
   const wins=(view.windows||[]).filter(function(w){ return w.days && w.days.length===4; });
-  if(!wins.length){ rEl.innerHTML='暂无可用的四天窗口'; return; }
-  // 先按既有判定档位筛选，再在同一档内沿用原有风险/可信度/周末排序。
+  const packingPanel=document.getElementById('sPacking');
+  if(!wins.length){
+    rEl.textContent='暂无可用的四天窗口';
+    document.getElementById('sSub').textContent='';
+    document.getElementById('sVerdict').replaceChildren();
+    document.getElementById('sWhy').textContent='当前没有完整的四天预报数据。';
+    document.getElementById('sDays').replaceChildren();
+    document.getElementById('sAlt').replaceChildren();
+    if(packingPanel){ packingPanel.hidden=true; packingPanel.replaceChildren(); }
+    return;
+  }
+  // All tiers and alternatives use only four-day windows with zero weekend days.
   const selected=selectDisplayWindow(wins);
-  if(!selected || !selected.window){ rEl.innerHTML='暂无可用的四天窗口'; return; }
+  if(!selected || !selected.window){
+    rEl.textContent='暂无连续四个工作日窗口';
+    document.getElementById('sSub').textContent='自动推荐已排除周六、周日；当前预报范围内没有完整的四个工作日连续行程。';
+    document.getElementById('sVerdict').replaceChildren();
+    document.getElementById('sWhy').textContent='不会为了凑出行日期而推荐包含周末的行程。';
+    document.getElementById('sDays').replaceChildren();
+    document.getElementById('sAlt').replaceChildren();
+    if(packingPanel){ packingPanel.hidden=true; packingPanel.replaceChildren(); }
+    return;
+  }
   const best=selected.window, candidatePool=selected.candidates;
   const minPen=candidatePool.length? Math.min.apply(null,candidatePool.map(function(w){return winPen(w);})) : Infinity;
   const days=best.days, v=windowVerdict(best,selected.tier);
   const mc=Math.min.apply(null,days.map(function(d){ return d.conf; }));
   const tent=mc<=1? ' · 暂定' : '';
-  const crowdNote=best.wk===0? '全工作日，符合避开周末的偏好' : '含 '+best.wk+' 个周末日；天气接近时已优先工作日';
   rEl.innerHTML=days[0].date+' <small>'+days[0].wd+' 出发 · '+days[3].date+' '+days[3].wd+' 返程'+tent+'</small>';
   document.getElementById('sSub').textContent='4 天 3 晚 · 出发 '+days[0].date+' · 返程 '+days[3].date
-    + (mc<=1? ' · 这几天的预报还远，日期先当暂定' : '')+' · '+crowdNote;
+    + (mc<=1? ' · 这几天的预报还远，日期先当暂定' : '')+' · 全程工作日（不含周末）';
   document.getElementById('sVerdict').innerHTML='<span class="vpill v-'+v.k+'"><i></i>'+v.t+'</span>';
   document.getElementById('sWhy').textContent=v.why;
 
@@ -438,8 +592,9 @@ function renderSimple(view){
       +'<div class="s-conf"><span class="cf c'+c+'">可信 '+(c===3?'高':c===2?'中':'低')+'</span><small>'+confWhy(d)+'</small></div>'
       +'</div>';
   }).join('');
+  renderPacking(days,view);
 
-  // 备选：最多一个，且不能与主选重叠；天气风险接近时仍优先周末日更少的窗口
+  // 备选：最多一个，且不能与主选重叠；备选同样只允许工作日
   const altBox=document.getElementById('sAlt');
   const idxOf=function(w){ return view.days.findIndex(function(d){ return d.date===w.days[0].date; }); };
   const bi=idxOf(best);

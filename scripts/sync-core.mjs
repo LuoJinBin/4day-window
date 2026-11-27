@@ -63,7 +63,7 @@ const coreBody = app.slice(0, i);
 const EXPORTS = [
   'median', 'forecastMeta', 'chinaParts', 'chinaIso', 'chinaHour', 'leadOf', 'applyDayProgress', 'completedHourlyRainEstimate', 'weatherGroup', 'applyDaylightWeatherCodes',
   'dayScore', 'metrics', 'compareWindowPreference', 'buildWindows', 'rankTripWindows', 'selectDisplayWindow', 'windowVerdict', 'packDays',
-  'riskOf', 'riskText', 'wxWord', 'confTier', 'confWhy',
+  'riskOf', 'riskText', 'wxWord', 'confTier', 'confWhy', 'recommendPacking',
   'winPen', 'verdictOf',
   'fromOpenMeteo', 'aggPoints', 'mergeDaily', 'snapshotView',
   'RUB', 'NEED', 'WD', 'W_SCORE',

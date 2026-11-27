@@ -278,6 +278,17 @@ footer b{color:var(--ink2)}
 .s-altbox{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;border:1px dashed var(--rule);padding:8px 12px}
 .s-altk{font-size:11px;letter-spacing:.12em;color:var(--ink3)}
 .s-altv{font-weight:600}
+.s-packing{margin-top:14px;padding:14px 16px;border:1px solid var(--rule);background:#F8FAF8}
+.s-packing[hidden]{display:none!important}
+.s-pack-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 14px}
+.s-pack-head h2{margin:0;font-size:15px;font-weight:700}
+.s-pack-head span{font-size:12px;color:var(--ink3)}
+.s-pack-intro{margin:8px 0 0;font-size:12.5px;color:var(--ink2)}
+.s-pack-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:8px;list-style:none;padding:0;margin:10px 0 0}
+.s-pack-list li{min-width:0;border:1px solid var(--rule);background:#fff;padding:9px 11px}
+.s-pack-list b{display:block;font-size:13px;color:var(--ink)}
+.s-pack-list small{display:block;margin-top:3px;font-size:11.5px;line-height:1.5;color:var(--ink3)}
+.s-pack-note{margin:8px 0 0;font-size:12px;line-height:1.65;color:var(--ink3)}
 .s-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-top:18px}
 .s-stamp{font-size:12px;color:var(--ink3)}
 .s-btn{font:inherit;font-size:13px;padding:7px 14px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;border-radius:2px}

@@ -63,6 +63,9 @@ async function build() {
   }
 
   const publishedHtml = await fs.readFile(path.join(OUTPUT, 'index.html'), 'utf8');
+  if (!publishedHtml.includes('id="sPacking"')) {
+    throw new Error('GitHub Pages 首页缺少最少携带衣物区域');
+  }
   if (publishedHtml.includes('/api/forecast') || publishedHtml.includes('/api/geocoding')) {
     throw new Error('静态网站仍引用不可用的服务端 API');
   }
@@ -71,6 +74,10 @@ async function build() {
   }
   for (const name of ASSETS) {
     await fs.access(path.join(OUTPUT, 'assets', name));
+  }
+  const publishedCore = await fs.readFile(path.join(OUTPUT, 'assets', 'app-core.js'), 'utf8');
+  if (!publishedCore.includes('function recommendPacking(')) {
+    throw new Error('GitHub Pages 首页缺少衣物推荐计算逻辑');
   }
 
   const entries = await fs.readdir(OUTPUT);
