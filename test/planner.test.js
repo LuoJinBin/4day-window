@@ -198,19 +198,21 @@ test('1、2、4、7 天窗口，指定日期不会被天气更好的日期自动
     assert.equal(manual.current.start, start);
     assert.equal(manual.current.end, addDays(start, length - 1));
     assert.equal(manual.current.tier, 'unsuitable');
-    assert.equal(manual.alternatives[0].start, addDays(start, 1));
+    assert.ok(manual.alternatives.every(window => window.wk === 0));
+    if (length === 7) assert.equal(manual.alternatives.length, 0);
     assert.equal(manual.current.score, makeWindow(start, length, days).score);
   }
 });
 
-test('自动查找跳过已结束的时段，手动查找保留今天', () => {
+test('自动查找跳过已结束时段和周末，手动查找保留原日期', () => {
   const start = '2026-11-27';
-  const end = '2026-11-28';
-  const days = new Map([start, end].map(date => [date, {
+  const end = '2026-11-30';
+  const dates = [start, '2026-11-28', '2026-11-29', end];
+  const days = new Map(dates.map(date => [date, {
     date, n: 6, conf: 3, score: 90, hi: 22, lo: 18, ok: true, loose: true, trend: true
   }]));
   const options = { days, start, end, length: 1, preference: 'any', coverageStart: start,
-    coverageEnd: end, earliest: end };
+    coverageEnd: end, earliest: '2026-11-28' };
   assert.equal(evaluatePlan({ ...options, mode: 'auto' }, scoring).current.start, end);
   assert.equal(evaluatePlan({ ...options, mode: 'manual' }, scoring).current.start, start);
   assert.equal(evaluatePlan({ ...options, end: start, mode: 'auto' }, scoring).current, null);
