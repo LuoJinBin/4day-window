@@ -76,8 +76,10 @@ async function build() {
     await fs.access(path.join(OUTPUT, 'assets', name));
   }
   const publishedCore = await fs.readFile(path.join(OUTPUT, 'assets', 'app-core.js'), 'utf8');
-  if (!publishedCore.includes('function recommendPacking(')) {
-    throw new Error('GitHub Pages 首页缺少衣物推荐计算逻辑');
+  if (!publishedCore.includes('function recommendPacking(') ||
+    !publishedCore.includes('睡衣裤') ||
+    !publishedCore.includes('默认住宿有洗衣机')) {
+    throw new Error('GitHub Pages 首页缺少洗衣轮换或睡衣推荐逻辑');
   }
 
   const entries = await fs.readdir(OUTPUT);

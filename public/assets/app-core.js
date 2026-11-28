@@ -262,15 +262,20 @@ function recommendPacking(days){
     return {available:false, missingDates, reason:'部分日期缺少完整天气数据，暂不编造衣物数量。'};
   }
 
-  const changeDays=days.slice(1);
+  const topType=function(d){
+    if(d.hi>=25) return 'short';
+    if(d.hi<=16) return 'warm';
+    return 'long';
+  };
   const tops={short:0,long:0,warm:0};
-  changeDays.forEach(function(d){
-    if(d.hi>=25) tops.short+=1;
-    else if(d.hi<=16) tops.warm+=1;
-    else tops.long+=1;
+  // Wash after every two days. Clothes worn on the previous two days can
+  // be reused once dry; otherwise pack a new top for that temperature band.
+  days.slice(1).forEach(function(d,index){
+    const i=index+1, type=topType(d);
+    const reusable=i>=3 && [topType(days[i-3]),topType(days[i-2])].includes(type);
+    if(!reusable) tops[type]+=1;
   });
 
-  // Reuse the departure outfit. A jacket is packed only if a later day needs a warmer layer.
   const layerLevel=function(d){
     const wind=Number.isFinite(d.wind)?d.wind:0;
     if(d.lo<10 || d.hi<=15) return 2;
@@ -278,19 +283,21 @@ function recommendPacking(days){
     return 0;
   };
   const departureLayer=layerLevel(days[0]);
-  const laterLayer=Math.max(0,...changeDays.map(layerLevel));
+  const laterLayer=Math.max(0,...days.slice(1).map(layerLevel));
   const items=[];
   const add=function(name,quantity,unit,reason){
     if(quantity>0) items.push({name,quantity,unit,reason});
   };
 
-  add('内裤',changeDays.length,'条','每天更换；出发当天身上穿的 1 条不计');
-  add('袜子',changeDays.length,'双','每天更换；出发当天身上穿的 1 双不计');
-  add('短袖上衣',tops.short,'件','对应最高温 25℃ 及以上的行程日');
-  add('长袖上衣',tops.long,'件','对应最高温 17–24℃ 的行程日');
+  add('内裤',Math.min(days.length-1,2),'条','出发当天穿的 1 条不计；按第二晚洗衣、之后每两天轮换');
+  add('袜子',Math.min(days.length-1,2),'双','出发当天穿的 1 双不计；按第二晚洗衣、之后每两天轮换');
+  add('短袖上衣',tops.short,'件','按逐日最高温安排；相近温度的衣服洗后轮换');
+  add('长袖上衣',tops.long,'件','按逐日最高温安排；相近温度的衣服洗后轮换');
   add('保暖上衣',tops.warm,'件','对应最高温不超过 16℃ 的行程日');
-  add('下装（裤子/裙子）',Math.max(0,Math.ceil(days.length/2)-1),'条',
-    '身上穿的那条按连续穿两天计算，之后每两天换一条');
+  add('下装（裤子/裙子）',days.length>=3?1:0,'条',
+    '出发穿的那条先穿两天；中途洗衣，备用这条再轮换');
+  add('睡衣裤',days.length>=2?(days.length>=5?2:1):0,'套',
+    days.length>=5?'单独用于睡觉，带两套轮换并中途清洗':'单独用于睡觉；四天三晚带一套重复穿，不与白天裤子混算');
   if(laterLayer>departureLayer){
     add(laterLayer===2?'保暖外套':'薄外套/防风外套',1,'件',
       '后续日期比出发日更冷或风更大；出发时身上的外套不够用');
@@ -300,10 +307,13 @@ function recommendPacking(days){
   }
 
   const uncertainDates=days.filter(d=>d.conf<=1 || d.lead>7 || d.nOrg<3).map(d=>d.date);
+  const laundryRule=days.length>=4
+    ? '默认住宿有洗衣机：第二晚洗一次，四天行程可在第四天轮换洗净晾干的衣物；超过四天后每两天再洗一次。按自然晾干计算，不默认有烘干机；若衣物不易干，额外带 1 套速干内衣袜子。'
+    : '默认住宿有洗衣机；行程较短，备用衣物够用，不必专门安排洗衣。睡衣单独计算，不与白天衣物混穿。';
   return {
     available:true, departure:days[0].date, returnDate:days[3].date,
     items, days, uncertainDates,
-    rule:'按每天更换内裤、袜子和上衣；下装每两天一条（出发身上那条也可重复穿）。不假设途中洗衣，出发当天身上穿的衣物不计入。'
+    rule:laundryRule
   };
 }
 
@@ -480,7 +490,7 @@ function renderPacking(days, view){
   const title=document.createElement('h2');
   title.textContent='最少携带衣物';
   const scope=document.createElement('span');
-  scope.textContent='不含出发当天身上穿的衣物';
+  scope.textContent='不含出发当天身上穿的白天衣物；睡衣单独计算';
   head.append(title,scope);
   panel.append(head);
 

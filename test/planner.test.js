@@ -73,13 +73,32 @@ test('携带衣物按实际出发日期逐日计算，并排除出发当天身�
   assert.equal(result.returnDate, '2026-11-30');
   assert.equal(result.changeDays, 3);
   const quantities = Object.fromEntries(result.items.map(item => [item.name, item.quantity]));
-  assert.equal(quantities['内裤'], 3);
-  assert.equal(quantities['袜子'], 3);
+  assert.equal(quantities['内裤'], 2);
+  assert.equal(quantities['袜子'], 2);
   assert.equal(quantities['短袖上衣'], 1);
   assert.equal(quantities['长袖上衣'], 2);
   assert.equal(quantities['下装（裤子/裙子）'], 1);
+  assert.equal(quantities['睡衣裤'], 1);
   assert.equal(quantities['薄外套/防风外套'], 1);
+  assert.match(result.rule, /第二晚洗一次/);
   assert.equal(quantities['折叠伞'], 1);
+});
+
+test('四天同类上衣在洗衣后轮换，避免每天多带一件', () => {
+  const daily = [
+    { date: '2026-11-27', n: 6, hi: 24, lo: 14, wind: 12 },
+    { date: '2026-11-28', n: 6, hi: 26, lo: 16, wind: 12 },
+    { date: '2026-11-29', n: 6, hi: 25, lo: 18, wind: 12 },
+    { date: '2026-11-30', n: 6, hi: 28, lo: 20, wind: 12 }
+  ];
+  const result = recommendPacking(daily, '2026-11-27', 4);
+  const quantities = Object.fromEntries(result.items.map(item => [item.name, item.quantity]));
+  assert.equal(quantities['内裤'], 2);
+  assert.equal(quantities['袜子'], 2);
+  assert.equal(quantities['短袖上衣'], 2);
+  assert.equal(quantities['长袖上衣'] || 0, 0);
+  assert.equal(quantities['下装（裤子/裙子）'], 1);
+  assert.equal(quantities['睡衣裤'], 1);
 });
 
 test('出发日已穿外套可在后续重复使用，不再重复计入行李', () => {

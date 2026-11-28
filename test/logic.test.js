@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SNAP, buildWindows, rankTripWindows, selectDisplayWindow, windowVerdict, verdictOf, winPen, riskOf, confTier, forecastMeta, metrics, wxWord, riskText,
+  SNAP, buildWindows, rankTripWindows, selectDisplayWindow, windowVerdict, verdictOf, winPen, riskOf, confTier, forecastMeta, metrics, wxWord, riskText, recommendPacking,
   chinaParts, chinaIso, leadOf, applyDayProgress, completedHourlyRainEstimate, aggPoints, applyDaylightWeatherCodes,
   MDL, ORG, W_MDL, CLIMO, CLIMO_META, BT, BT_LEADS
 } from '../src/core/logic.js';
@@ -13,6 +13,26 @@ const day = (o = {}) => Object.assign({
   modal: '阴', overcast: true
 }, o);
 const win = (days) => ({ days, conf: Math.min(...days.map((d) => d.conf)) });
+
+test('首页衣物清单按洗衣机轮换，睡衣与白天裤子分开计算', () => {
+  const days = [
+    day({ date: '11-30', wd: '周一', n: 6, nOrg: 5, hi: 24, lo: 14, wind: 12, popMax: 5, mmMed: 0 }),
+    day({ date: '12-01', wd: '周二', n: 6, nOrg: 5, hi: 26, lo: 16, wind: 12, popMax: 5, mmMed: 0 }),
+    day({ date: '12-02', wd: '周三', n: 6, nOrg: 5, hi: 25, lo: 18, wind: 12, popMax: 5, mmMed: 0 }),
+    day({ date: '12-03', wd: '周四', n: 6, nOrg: 5, hi: 28, lo: 20, wind: 12, popMax: 5, mmMed: 0 })
+  ];
+  const result = recommendPacking(days);
+  assert.equal(result.available, true);
+  const quantities = Object.fromEntries(result.items.map(item => [item.name, item.quantity]));
+  assert.equal(quantities['内裤'], 2);
+  assert.equal(quantities['袜子'], 2);
+  assert.equal(quantities['短袖上衣'], 2);
+  assert.equal(quantities['长袖上衣'] || 0, 0);
+  assert.equal(quantities['下装（裤子/裙子）'], 1);
+  assert.equal(quantities['睡衣裤'], 1);
+  assert.match(result.rule, /第二晚洗一次/);
+  assert.match(result.rule, /不默认有烘干机/);
+});
 
 test('内置快照可生成 4 天滑窗', () => {
   const w = buildWindows(SNAP.days);

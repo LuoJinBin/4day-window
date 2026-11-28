@@ -155,18 +155,17 @@ export function recommendPacking(dailyData, departure, length) {
       missingDates, reason: '部分日期缺少完整逐日预报，暂不生成衣物数量。' };
   }
 
-  // Departure outfit is worn, not packed. Pack one clean top and underwear/socks
-  // for each following day; reuse each lower garment for up to two days.
-  const changeDays = days.slice(1);
+  const topType = day => day.hi >= 25 ? 'short' : day.hi <= 16 ? 'warm' : 'long';
   const tops = { short: 0, long: 0, warm: 0 };
-  for (const day of changeDays) {
-    if (day.hi <= 16) tops.warm += 1;
-    else if (day.hi >= 25) tops.short += 1;
-    else tops.long += 1;
+  // Wash every two days. Reuse tops from the previous two-day batch once dry,
+  // but only when their temperature category still fits the forecast.
+  for (let index = 1; index < count; index += 1) {
+    const type = topType(days[index]);
+    const reusable = index >= 3 &&
+      [topType(days[index - 3]), topType(days[index - 2])].includes(type);
+    if (!reusable) tops[type] += 1;
   }
 
-  // A jacket worn on departure can be reused. Pack an additional layer only
-  // when a later day needs more protection than the departure day's outfit.
   const layerLevel = day => {
     const wind = Number.isFinite(day.windRisk) ? day.windRisk : day.wind;
     if (day.lo < 10 || day.hi <= 15) return 2;
@@ -174,7 +173,7 @@ export function recommendPacking(dailyData, departure, length) {
     return 0;
   };
   const departureLayer = layerLevel(days[0]);
-  const laterLayer = Math.max(0, ...changeDays.map(layerLevel));
+  const laterLayer = Math.max(0, ...days.slice(1).map(layerLevel));
   const rainDays = days.filter(day => day.rainy === true ||
     (Number.isFinite(day.popMed) ? day.popMed >= 50 : day.popMax >= 60) ||
     (Number.isFinite(day.mmMed) && day.mmMed >= 1));
@@ -183,12 +182,18 @@ export function recommendPacking(dailyData, departure, length) {
   const add = (name, quantity, unit, reason) => {
     if (quantity > 0) items.push({ name, quantity, unit, reason });
   };
-  add('内裤', changeDays.length, '条', '出发当天穿着的 1 套不计，每天更换');
-  add('袜子', changeDays.length, '双', '出发当天穿着的 1 双不计，每天更换');
-  add('短袖上衣', tops.short, '件', '对应较暖的行程日');
-  add('长袖上衣', tops.long, '件', '对应气温中等的行程日');
+  add('内裤', Math.min(count - 1, 2), '条',
+    '出发当天穿着的 1 条不计；第二晚洗衣，之后每两天轮换');
+  add('袜子', Math.min(count - 1, 2), '双',
+    '出发当天穿着的 1 双不计；第二晚洗衣，之后每两天轮换');
+  add('短袖上衣', tops.short, '件', '按逐日最高温安排；相近温度的衣服洗后轮换');
+  add('长袖上衣', tops.long, '件', '按逐日最高温安排；相近温度的衣服洗后轮换');
   add('保暖上衣', tops.warm, '件', '对应最高温不超过 16℃ 的行程日');
-  add('下装（裤子/裙子）', Math.max(0, Math.ceil(count / 2) - 1), '条', '出发当天身上穿的那条也可连续穿两天');
+  add('下装（裤子/裙子）', count >= 3 ? 1 : 0, '条',
+    '出发穿的那条先穿两天；中途洗衣，备用这条再轮换');
+  add('睡衣裤', count >= 2 ? (count >= 5 ? 2 : 1) : 0, '套',
+    count >= 5 ? '单独用于睡觉，带两套轮换并中途清洗' :
+      '单独用于睡觉；四天三晚带一套重复穿，不与白天裤子混算');
   if (laterLayer > departureLayer) {
     add(laterLayer === 2 ? '保暖外套' : '薄外套/防风外套', 1, '件',
       '后续日期比出发日更冷或风更大，出发日身上的外套不够用');
@@ -200,12 +205,15 @@ export function recommendPacking(dailyData, departure, length) {
   const uncertainDates = days.filter(day =>
     (Number.isFinite(day.lead) && day.lead > 7) ||
     (Number.isFinite(day.nOrg) && day.nOrg < 3)).map(day => day.date);
+  const laundryRule = count >= 4
+    ? '默认住宿有洗衣机：第二晚洗一次，四天行程可在第四天轮换洗净晾干的衣物；超过四天后每两天再洗一次。按自然晾干计算，不默认有烘干机；若衣物不易干，额外带 1 套速干内衣袜子。'
+    : '默认住宿有洗衣机；行程较短，备用衣物够用，不必专门安排洗衣。睡衣单独计算，不与白天衣物混穿。';
   return {
     available: true, departure, returnDate: days.at(-1).date, length: count,
-    changeDays: changeDays.length, minLow: Math.min(...days.map(day => day.lo)),
-    maxHigh: Math.max(...days.map(day => day.hi)), days, items, rainDates: rainDays.map(day => day.date),
-    departureLayer, laterLayer, uncertainDates,
-    rule: '按每天更换内裤、袜子和上衣；下装每两天一条，出发当天身上穿的那条也可重复穿。不假设途中洗衣。'
+    changeDays: count - 1, minLow: Math.min(...days.map(day => day.lo)),
+    maxHigh: Math.max(...days.map(day => day.hi)), days, items,
+    rainDates: rainDays.map(day => day.date), departureLayer, laterLayer, uncertainDates,
+    rule: laundryRule
   };
 }
 

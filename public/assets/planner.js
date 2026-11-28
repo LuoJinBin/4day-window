@@ -418,7 +418,7 @@ function renderPackingAdvice(current, opts, context) {
 
   panel.append(element('p',
     dateLabel(advice.departure) + ' 出发 · ' + opts.length + ' 天 · ' +
-    dateLabel(advice.returnDate) + ' 结束 · 身上穿着的出发装不计入',
+    dateLabel(advice.returnDate) + ' 结束 · 出发当天身上的白天衣物不计入 · 默认有洗衣机',
     'planner-packing-intro'));
 
   const list = element('ul', null, 'planner-packing-list');
